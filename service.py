@@ -12,7 +12,7 @@ import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
-from uuid import uuid4
+from uuid import NAMESPACE_URL, uuid4, uuid5
 
 import office
 import progress
@@ -76,7 +76,7 @@ def _snapshot(request, feed, now):
     chat_ids = [chat["id"] for chat in chats]
     teams = office.build_teams(delegations, set(chat_ids), now)
     previous = store.read_json("desks.json", {})
-    pods = office.assign_helper_desks(teams, office.assign_pods(chat_ids, previous, now))
+    pods = office.assign_helper_desks(teams, office.assign_floors(chats, previous))
     if pods != previous:
         store.write_json("desks.json", pods)
     # Read-only here: only the progress route writes progress.json.
@@ -288,6 +288,59 @@ def _internet(request, feed, now):
     record_switch(True, told, now)
     return {"ok": True, "off": False, "told": told, "failed": len(failed),
             "failed_names": [state["titles"].get(c) or present[c].get("title") or "A chat" for c in failed]}
+
+
+# --- The CR desk: hiring starts a new chat (spec 2026-10-08 §7.4, §8) -----------
+
+HIRE_BUDGET_SECONDS = 12.0  # create, lock the name, send: all inside Möbius's 15 s
+HIRE_LOG_KEEP = timedelta(days=30)
+HIRE_TITLE_MAX = 80
+HIRE_TEXT_MAX = 8000
+
+
+def record_hire(chat_id, ok, now):
+    """Log each hire (when, which chat, whether it worked), never the name or message; 30 days."""
+    kept = [entry for entry in store.read_json("hire-log.json", [])
+            if (office.parse_time(entry.get("at")) or now) >= now - HIRE_LOG_KEEP]
+    kept.append({"at": now.isoformat(), "chat_id": chat_id, "ok": ok})
+    store.write_json("hire-log.json", kept)
+
+
+@route("POST", "hire")
+def _hire(request, feed, now):
+    body = _body(request)
+    title = body.get("title").strip() if isinstance(body.get("title"), str) else ""
+    text = body.get("text").strip() if isinstance(body.get("text"), str) else ""
+    cid = body.get("cid")
+    if not (0 < len(title) <= HIRE_TITLE_MAX and 0 < len(text) <= HIRE_TEXT_MAX and _is_id(cid)):
+        return _problem("bad_request", "Give the new hire a name (up to 80 characters) and a first message.")
+    now = now or datetime.now(UTC)
+    feed = feed or OwnerFeed(deadline=time.monotonic() + HIRE_BUDGET_SECONDS, clock=time.monotonic)
+    chat_id = str(uuid5(NAMESPACE_URL, f"clankerville-hire:{cid}"))  # a retry finds the same chat
+    try:
+        feed.create_chat(chat_id, title)
+    except FeedError as exc:
+        record_hire(chat_id, False, now)
+        return _failure(exc)
+    # Lock the owner's name (one retry): otherwise Möbius renames a chat from its first message.
+    name_locked = False
+    for _ in range(2):
+        try:
+            feed.rename_chat(chat_id, title)
+            name_locked = True
+            break
+        except FeedError:
+            continue
+    try:
+        feed.send_message(chat_id, {"content": text, "cid": cid})
+    except FeedError as exc:
+        record_hire(chat_id, False, now)
+        # A timeout isn't a refusal: the message may well have arrived (as with the sword).
+        error = ({"code": "unconfirmed", "message": "Möbius didn't confirm the first message; it may have arrived."}
+                 if exc.code == "mobius_unavailable" else {"code": exc.code, "message": str(exc)})
+        return {"ok": False, "created": True, "chat_id": chat_id, "error": error}
+    record_hire(chat_id, True, now)
+    return {"ok": True, "chat_id": chat_id} if name_locked else {"ok": True, "chat_id": chat_id, "name_locked": False}
 
 
 # --- Quick reply: read a chat, reply, answer its question, open it beside -------

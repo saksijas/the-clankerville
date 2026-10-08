@@ -132,3 +132,17 @@ def test_410_means_the_question_changed(tmp_path):  # final review: important
     with pytest.raises(FeedError) as e:
         feed(tmp_path, http_error(410, {"detail": "The question is no longer accepting answers."})).send_message("c1", {})
     assert e.value.code == "question_changed" and str(e.value) == "This question changed. Take another look."
+
+
+def test_create_chat_posts_its_id_and_title(tmp_path):  # the CR desk (spec 2026-10-08 §8)
+    rec = Recorder(json_body={"id": "8d4f0b8e-6a8b-5c1e-9f1a-1c2d3e4f5a6b", "title": "Fix login"})
+    OwnerFeed(base_url="http://x", key_path=key(tmp_path, "k"), opener=rec).create_chat("8d4f0b8e-6a8b-5c1e-9f1a-1c2d3e4f5a6b", "Fix login")
+    assert rec.last.get_method() == "POST" and rec.last.full_url == "http://x/api/chats"
+    assert json.loads(rec.last.data) == {"id": "8d4f0b8e-6a8b-5c1e-9f1a-1c2d3e4f5a6b", "title": "Fix login"}
+
+
+def test_rename_chat_patches_its_title(tmp_path):
+    rec = Recorder(json_body={"id": "c1"})
+    OwnerFeed(base_url="http://x", key_path=key(tmp_path, "k"), opener=rec).rename_chat("c1", "Fix login")
+    assert rec.last.get_method() == "PATCH" and rec.last.full_url == "http://x/api/chats/c1"
+    assert json.loads(rec.last.data) == {"title": "Fix login"}

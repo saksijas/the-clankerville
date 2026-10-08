@@ -99,6 +99,15 @@ class OwnerFeed:
         # The quick-reply card: the chat's last few messages and what it waits on.
         return self._call("GET", f"/api/chats/{quote(chat_id, safe='')}?limit={int(limit)}")
 
+    def create_chat(self, chat_id, title):
+        # The CR desk's hire (spec 2026-10-08 §8). The id is chosen here, so a retry with the
+        # same id gets the same chat back instead of a second one.
+        return self._call("POST", "/api/chats", {"id": chat_id, "title": title})
+
+    def rename_chat(self, chat_id, title):
+        # An owner rename locks the name; otherwise Möbius renames a chat from its first message.
+        return self._call("PATCH", f"/api/chats/{quote(chat_id, safe='')}", {"title": title})
+
     def send_message(self, chat_id, body):
         # A reply or a question answer, exactly as the chat's own composer or card sends it.
         return self._call("POST", f"/api/chats/{quote(chat_id, safe='')}/messages", body)

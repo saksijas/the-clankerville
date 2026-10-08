@@ -191,7 +191,7 @@ const SIGN_TILE_PX = Math.hypot(TILE, TILE / 2) // one tile along the left wall,
 const CHAR_W = 0.56 // average glyph width as a share of the font size
 export function signLayout(text, scale, depth) {
   const lo = 0.4
-  const hi = depth - 2.4 // the door starts at depth - 2.2
+  const hi = depth - 2.4 // the door starts at depth - 2 (doorSpan), so the sign ends before it
   const room = hi - lo
   let fontSize = 7.5 * scale
   const lengthFor = size => (text.length * size * CHAR_W + 14 * (size / 7.5)) / SIGN_TILE_PX
@@ -364,8 +364,8 @@ export function departureDelays(ids) {
   return Object.fromEntries(ids.map((id, index) => [id, index * DEPARTURE_STAGGER_MS]))
 }
 
-// Where the door meets the floor: Scene draws it on the left wall between
-// y = depth - 2.2 and depth - 0.9.
+// Where the door meets the floor: the middle of doorSpan, on the left wall by the lobby
+// (y = depth - 2 to depth - 1.1; the elevator follows it).
 export function doorSpot(room) {
   return { x: 0.35, y: round(room.depth - 1.55) }
 }
@@ -524,3 +524,146 @@ export function internetToast(result, turningOn) {
   const stopped = (result.paused || 0) + (result.unconfirmed || 0)
   return stopped ? `You turned off the Internet. ${agents(stopped)} stopped.` : 'You turned off the Internet. Nobody was working, so nobody noticed.'
 }
+
+// --- The building: floors, the lobby and the elevator (spec 2026-10-08) ------
+// Every floor is the same room: pods, plus a 2-tile lobby along the front. On the lobby's
+// stretch of the left wall the door comes first, then the elevator.
+
+export const doorSpan = room => [room.depth - 2, round(room.depth - 1.1)]
+export const elevatorSpan = room => [room.depth - 1, round(room.depth - 0.1)]
+export const elevatorSpot = room => ({ x: 0.4, y: round(room.depth - 0.55) })
+export const crDeskSpot = room => ({ x: 3.2, y: round(room.depth - 1.1) }) // floor 1's lobby, near the door
+
+export function onFloor(snap, floor) {
+  return (snap?.characters || []).filter(c => (c.floor || 1) === floor)
+}
+
+export function floorBadges(snap) {
+  return new Set((snap?.floors || []).filter(f => (f.counts?.needs_you || 0) > 0).map(f => f.floor))
+}
+
+export const floorLabel = (floor, floors) => `Floor ${floor} of ${floors}`
+
+const SUMMARY = [['needs_you', 'needs you'], ['working', 'working'], ['error', 'error'], ['watching', 'watching'], ['on_break', 'on break']]
+
+export function floorSummary(counts) {
+  const parts = SUMMARY.filter(([key]) => (counts?.[key] || 0) > 0).map(([key, label]) => `${counts[key]} ${label}`)
+  return parts.length ? parts.join(' · ') : 'Nobody here yet'
+}
+
+// Who changed floors since the last snapshot, as seen from `viewFloor`: arrivals walk in from the
+// elevator, departures walk out to it. Agents new to the office (no previous floor) just appear.
+export function floorMoves(previousFloors, characters, viewFloor) {
+  const arrivals = new Set()
+  const departures = []
+  for (const character of characters) {
+    const before = previousFloors[character.id]
+    if (before === undefined || before === character.floor) continue
+    if (character.floor === viewFloor) arrivals.add(character.id)
+    else if (before === viewFloor) departures.push(character.id)
+  }
+  return { arrivals, departures }
+}
+
+// --- The walking man (spec 2026-10-08 §7.2) ----------------------------------
+// The owner's own character: tap the floor or hold an arrow key to walk; walking into the
+// elevator opens the floor list. His position lives on this screen only.
+
+export const WALKER_SPEED = 2.5 // tiles a second, as in Break Room
+
+export function walkerAt(walk, nowMs) {
+  const [fx, fy] = walk.from
+  const [tx, ty] = walk.to
+  const dist = Math.hypot(tx - fx, ty - fy)
+  const done = ((nowMs - walk.at) / 1000) * WALKER_SPEED
+  if (dist === 0 || done >= dist) return [tx, ty]
+  const share = Math.max(0, done) / dist
+  return [fx + (tx - fx) * share, fy + (ty - fy) * share]
+}
+
+const within = (v, lo, hi) => Math.min(hi, Math.max(lo, v))
+export const insideRoom = ([x, y], room) => [within(x, 0.45, room.width - 0.45), within(y, 0.45, room.depth - 0.45)]
+
+// Arrow keys walk in screen directions; holding one aims far, and letting go stops him.
+const SCREEN_DIRECTIONS = { ArrowUp: [-1, -1], ArrowDown: [1, 1], ArrowLeft: [-1, 1], ArrowRight: [1, -1] }
+export function walkerTarget([x, y], key, room) {
+  const dir = SCREEN_DIRECTIONS[key]
+  return dir ? insideRoom([x + dir[0] * 20, y + dir[1] * 20], room) : null
+}
+
+export function nearElevator([x, y], room) {
+  const lift = elevatorSpot(room)
+  return Math.hypot(x - lift.x, y - lift.y) <= 0.5
+}
+
+// The floor tile under a point of the scene (the inverse of `project` at z = 0).
+export function toFloorPoint(sx, sy, frame) {
+  const a = (sx - frame.ox) / TILE // x - y
+  const b = (2 * (sy - frame.oy)) / TILE // x + y
+  return [(a + b) / 2, (b - a) / 2]
+}
+
+export const keysFree = ({ dialogOpen, focusTag }) => !dialogOpen && !['INPUT', 'TEXTAREA', 'SELECT'].includes(focusTag)
+
+// --- Easter eggs on floors 2-4 (spec 2026-10-08 §7.3) -------------------------
+// Screen-only fun: tap the floor's corner object. None of them touches a real agent.
+
+export const GOSSIP = [
+  'Did you hear about the merge?',
+  'Who broke the build?',
+  'Floor 1 has the Internet back.',
+  'The sword is out again…',
+  'Apparently there is cake on 3.',
+  'Have you met the new hire?',
+]
+export const COOLER_EMPTY = "Nobody's on break. Back to work!"
+export const PHONE_LINES = ['Hello, IT. Have you tried turning it off and on again?', 'Is it definitely plugged in?']
+export const FIRE_TEXT = '🔥 Fire! Call 0118 999 881 999 119 725… 3'
+const EGG_MS = { watercooler: 8000, phone: 6500, fire: 6000 }
+
+export function eggMoment(egg, startedAt, now) {
+  const t = startedAt == null ? -1 : now - startedAt
+  if (t < 0 || t >= (EGG_MS[egg] || 0)) return { active: false }
+  if (egg === 'phone') return t < 1500 ? { active: true, ringing: true, text: null } : { active: true, ringing: false, text: PHONE_LINES[t < 4000 ? 0 : 1] }
+  if (egg === 'fire') return { active: true, text: FIRE_TEXT }
+  return { active: true, text: null }
+}
+
+export const gossipFor = index => GOSSIP[index % GOSSIP.length]
+
+// --- The CR desk (spec 2026-10-08 §7.4) ---------------------------------------
+// Clanker Resources: the applicants' papers open a form, and Hire starts a real chat.
+
+export const HIRE_TITLE_MAX = 80
+export const HIRE_TEXT_MAX = 8000
+
+export function hireProblem(title, text) {
+  const name = (title || '').trim()
+  const first = (text || '').trim()
+  if (!name) return 'Give your new hire a name.'
+  if (name.length > HIRE_TITLE_MAX) return 'Names can be up to 80 characters.'
+  if (!first) return 'Write what they should start on.'
+  if (first.length > HIRE_TEXT_MAX) return 'The first message can be up to 8,000 characters.'
+  return null
+}
+
+export function hireToast(result, name) {
+  if (result?.ok && result.name_locked === false) return `Hired ${name}. They're heading to a desk, though Möbius may rename the chat from its first message.`
+  if (result?.ok) return `Hired ${name}. They're heading to a desk.`
+  if (result?.created && result.error?.code === 'unconfirmed') return `${name} is hired, but Möbius didn't confirm their first message. Check the chat before sending it again.`
+  if (result?.created) return `${name} is hired, but their first message didn't send. Open the chat to send it.`
+  return `Couldn't hire ${name}: ${result?.error?.message || 'something went wrong.'}`
+}
+
+// A short arrow press still moves him a whole tile (spec 2026-10-08 §7.2): he stops at whichever is
+// further along, where he is now or one tile from where the press started.
+export function arrowStop(start, here, key, room) {
+  const dir = SCREEN_DIRECTIONS[key]
+  if (!dir) return here
+  if (Math.hypot(here[0] - start[0], here[1] - start[1]) >= 1) return here
+  const len = Math.hypot(dir[0], dir[1])
+  return insideRoom([start[0] + dir[0] / len, start[1] + dir[1] / len], room)
+}
+
+// A toast with a button (Open chat) stays up long enough to press it.
+export const toastMs = action => (action ? 15000 : 6500)

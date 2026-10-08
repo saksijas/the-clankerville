@@ -1,5 +1,5 @@
 import React from 'react'
-import { declutter } from '../domain.js'
+import { crDeskSpot, declutter, elevatorSpan, wallTextTransform } from '../domain.js'
 
 /* SVG pieces of the office, drawn in isometric space through a projection
    `P(x, y, z) -> [sx, sy]` that the Scene supplies. Art follows the approved
@@ -188,4 +188,130 @@ export function CoffeeCorner({ P, origin, f, off = false, armed = false, onPress
 export function Plant({ P, x, y }) {
   const [a, b] = P(x + 0.17, y + 0.17, 16)
   return <g>{isoBox(P, x, y, 0.35, 0.35, 9, 0, ['#c9774a', '#b5653a', '#9c5431'])}<circle cx={a} cy={b} r="9" fill="#3fae5a" /><circle cx={a + 3} cy={b - 6} r="6" fill="#58c472" /></g>
+}
+
+// The elevator on the lobby's stretch of the left wall (spec 2026-10-08 §7.1): steel doors, the
+// floor number lit above them, and a red dot when another floor needs you. Pressing it opens the
+// floor picker, like walking into it.
+export function Elevator({ P, room, floor, dot, onPress }) {
+  const [e0, e1] = elevatorSpan(room)
+  const mid = (e0 + e1) / 2
+  const quad = (a, b, z0, z1) => [P(0, a, z0), P(0, b, z0), P(0, b, z1), P(0, a, z1)].map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ')
+  const [lx, ly] = P(0, mid, 55)
+  const press = event => { event.stopPropagation(); onPress?.() }
+  return (
+    <g className="ao-lift" role="button" tabIndex={0} aria-label={`Elevator. You're on floor ${floor}`}
+      onClick={press} onPointerDown={event => event.stopPropagation()}
+      onKeyDown={event => { if ((event.key === 'Enter' || event.key === ' ') && !event.repeat) { event.preventDefault(); press(event) } }}>
+      <polygon points={quad(e0, e1, 0, 50)} fill="#6f7688" />
+      <polygon points={quad(e0 + 0.06, mid - 0.015, 2, 46)} fill="#c9ced9" />
+      <polygon points={quad(mid + 0.015, e1 - 0.06, 2, 46)} fill="#bcc2cf" />
+      <polygon points={quad(mid - 0.22, mid + 0.22, 51, 59)} fill="#1f2330" />
+      <text x={lx} y={ly + 2.4} fontSize="7" fontWeight="700" fill="#3fcf8e" textAnchor="middle" transform={wallTextTransform('left', lx, ly)}>{floor}</text>
+      {dot && <circle cx={P(0, e1 - 0.12, 56)[0]} cy={P(0, e1 - 0.12, 56)[1]} r="2.6" fill="#ff5c5c" stroke="#fff" strokeWidth=".8" />}
+    </g>
+  )
+}
+
+// The owner's walking man (spec 2026-10-08 §7.2): the IT-nerd look he liked, white shirt, red tie
+// and glasses. Drawn like everyone else, plus the tie and glasses.
+const YOU_LOOK = { hair: '#3b2a20', shirt: '#f4f1fb', skin: '#f0c39a' }
+export function Walker({ P, spot, f }) {
+  const [sx, sy] = P(spot.x, spot.y)
+  return (
+    <g pointerEvents="none">
+      <Person P={P} spot={spot} look={YOU_LOOK} pose={null} f={f} />
+      <polygon points={`${sx - 1.4},${sy - 29.5} ${sx + 1.4},${sy - 29.5} ${sx + 2.1},${sy - 19} ${sx},${sy - 16.5} ${sx - 2.1},${sy - 19}`} fill="#e5484d" />
+      <g fill="none" stroke="#1b1726" strokeWidth="1">
+        <circle cx={sx - 2.7} cy={sy - 36.5} r="2.3" />
+        <circle cx={sx + 2.7} cy={sy - 36.5} r="2.3" />
+        <line x1={sx - 0.4} y1={sy - 36.7} x2={sx + 0.4} y2={sy - 36.7} />
+      </g>
+    </g>
+  )
+}
+
+// Floors 2-4's corners (spec 2026-10-08 §7.3), where the floor's on-break agents hang out.
+// Each one is a hidden button, like floor 1's Internet box; none of them touches a real agent.
+function eggButton(label, onPress) {
+  const press = event => { event.stopPropagation(); onPress?.() }
+  return {
+    className: 'ao-egg', role: 'button', tabIndex: 0, 'aria-label': label, onClick: press,
+    onPointerDown: event => event.stopPropagation(),
+    onKeyDown: event => { if ((event.key === 'Enter' || event.key === ' ') && !event.repeat) { event.preventDefault(); press(event) } },
+  }
+}
+
+export function Watercooler({ P, origin, active, onPress }) {
+  const x = origin.x + 2.7
+  const y = origin.y + 0.5
+  const [bx, by] = P(x + 0.3, y + 0.3, 24)
+  return (
+    <g {...eggButton('Watercooler', onPress)}>
+      {isoBox(P, x, y, 0.6, 0.6, 24, 0, ['#e9edf3', '#c9cfdb', '#b4bccb'])}
+      <rect x={bx - 7} y={by - 22} width="14" height="20" rx="5" fill="#9fd3f5" stroke="#6fb6e6" strokeWidth=".8" />
+      <rect x={bx - 3} y={by - 25} width="6" height="4" rx="1" fill="#6fb6e6" />
+      {active && [0, 1, 2].map(i => (
+        <circle key={i} className="ao-bubble-rise" cx={bx - 3 + i * 3} cy={by - 6} r="1.4" fill="#fff" style={{ animationDelay: `${i * 0.35}s` }} />
+      ))}
+    </g>
+  )
+}
+
+export function PhoneCorner({ P, origin, ringing, onPress }) {
+  const x = origin.x + 2.7
+  const y = origin.y + 0.5
+  const [hx, hy] = P(x + 0.35, y + 0.3, 18)
+  return (
+    <g {...eggButton('Phone', onPress)}>
+      {isoBox(P, x, y, 0.7, 0.6, 14, 0, ['#b98457', '#9a6a44', '#855a39'])}
+      <g className={ringing ? 'ao-ringing' : undefined}>
+        {isoBox(P, x + 0.15, y + 0.15, 0.4, 0.3, 3, 14, ['#3a3f4f', '#262a35', '#1f2330'])}
+        <rect x={hx - 6} y={hy - 3} width="12" height="3.4" rx="1.7" fill="#e5484d" />
+        {ringing && <g fill="none" stroke="#e5484d" strokeWidth="1"><path d={`M ${hx + 8} ${hy - 8} q 3 3 0 6`} /><path d={`M ${hx - 8} ${hy - 8} q -3 3 0 6`} /></g>}
+      </g>
+    </g>
+  )
+}
+
+const FLAME_SPOTS = [[-1.2, 1.0], [-0.4, 1.6], [0.4, 0.9]]
+export function FireCorner({ P, origin, active, onPress }) {
+  const x = origin.x + 2.7
+  const y = origin.y + 0.5
+  const [lx, ly] = P(x + 0.25, y + 0.4, 13)
+  return (
+    <g {...eggButton('In case of fire', onPress)}>
+      {isoBox(P, x, y, 0.5, 0.4, 22, 0, ['#ff8a80', '#e5484d', '#c43a3f'])}
+      <text x={lx} y={ly} fontSize="4.2" fontWeight="800" fill="#fff" textAnchor="middle">FIRE</text>
+      {active && FLAME_SPOTS.map(([dx, dy], i) => {
+        const [fx, fy] = P(x + dx, y + dy)
+        return (
+          <g key={i} className="ao-flicker" style={{ animationDelay: `${i * 0.15}s`, transformOrigin: `${fx}px ${fy}px` }}>
+            <path d={`M ${fx - 7} ${fy} Q ${fx - 6} ${fy - 14} ${fx} ${fy - 22} Q ${fx + 6} ${fy - 14} ${fx + 7} ${fy} Z`} fill="#ff7a1a" />
+            <path d={`M ${fx - 4} ${fy} Q ${fx - 3} ${fy - 8} ${fx} ${fy - 13} Q ${fx + 3} ${fy - 8} ${fx + 4} ${fy} Z`} fill="#ffd166" />
+          </g>
+        )
+      })}
+    </g>
+  )
+}
+
+// The CR desk, Clanker Resources (spec 2026-10-08 §7.4): a reception desk in floor 1's lobby with a
+// sign and a stack of applicants' papers. Pressing it opens the hire form.
+export function CRDesk({ P, room, onPress, scale = 1 }) {
+  const { x, y } = crDeskSpot(room)
+  const [sx, fy] = P(x + 0.65, y + 0.6, 0)
+  const sy = fy + 9 // the sign sits under the desk, like a name tag, clear of the agents behind it
+  const [tx, ty] = P(x + 0.95, y + 0.55, 15)
+  const label = 'CR · Clanker Resources'
+  const w = (label.length * 4.1 + 12) * scale
+  return (
+    <g {...eggButton('Clanker Resources: hire a new clanker', onPress)}>
+      {isoBox(P, x, y, 1.3, 0.6, 14, 0, ['#d6b48a', '#b8915f', '#a07a4c'])}
+      {[0, 1, 2].map(i => <g key={i}>{isoBox(P, x + 0.7, y + 0.2, 0.42, 0.3, 1, 14 + i * 1.3, ['#fffdf7', '#e9e4d8', '#ddd6c6'])}</g>)}
+      <rect x={sx - w / 2} y={sy - 7 * scale} width={w} height={14 * scale} rx={7 * scale} fill="#6d5dfc" stroke="#4b3fd1" strokeWidth=".8" />
+      <text x={sx} y={sy + 2.4 * scale} fontSize={6.6 * scale} fontWeight="800" fill="#fff" textAnchor="middle">{label}</text>
+      <text x={tx} y={ty + 5 * scale} fontSize={4.2 * scale} fontWeight="700" fill="#2a2340" stroke="#fff" strokeWidth={1.2 * scale} paintOrder="stroke" textAnchor="middle">Applicants</text>
+    </g>
+  )
 }

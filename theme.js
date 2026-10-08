@@ -112,8 +112,41 @@ export const CSS = `
   @keyframes ao-walk { 0% { transform: translate(0, 0); opacity: 1; } 88% { opacity: 1; } 100% { transform: translate(var(--dx), var(--dy)); opacity: 0; } }
   .ao-recap { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; padding: 16px; background: rgba(20,16,36,.45); }
   .ao-recap-card { width: min(420px, 100%); box-shadow: 0 12px 40px rgba(0,0,0,.3); }
+  .ao-lift { cursor: pointer; }
+  .ao-lift:focus-visible { outline: 2px solid #6d5dfc; outline-offset: 2px; }
+  .ao-lift-card { width: min(360px, 100%); display: flex; flex-direction: column; gap: 12px; box-shadow: 0 12px 40px rgba(0,0,0,.3); }
+  .ao-lift-list { display: flex; flex-direction: column; gap: 8px; }
+  .ao-lift-floor { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface-2, #242427); color: var(--text); font: inherit; text-align: left; cursor: pointer; }
+  .ao-lift-floor[aria-current="true"] { border-color: #6d5dfc; box-shadow: inset 0 0 0 1px #6d5dfc; }
+  .ao-lift-floor span { font-size: 12.5px; color: var(--muted); }
+  .ao-floordot { display: inline-block; width: 8px; height: 8px; margin-left: 6px; border-radius: 50%; background: #ff5c5c; vertical-align: middle; }
+  .ao-floorbtn { white-space: nowrap; }
+  .ao-from-lift { animation: ao-from-lift 1.4s ease-out both; }
+  @keyframes ao-from-lift { from { transform: translate(var(--dx), var(--dy)); opacity: .15; } to { transform: translate(0, 0); opacity: 1; } }
+  .ao-to-lift { animation: ao-to-lift 1.4s ease-in both; }
+  @keyframes ao-to-lift { from { transform: translate(0, 0); opacity: 1; } 85% { opacity: 1; } to { transform: translate(var(--dx), var(--dy)); opacity: 0; } }
+  .ao-egg { cursor: pointer; }
+  .ao-egg:focus-visible { outline: 2px solid #6d5dfc; outline-offset: 2px; }
+  .ao-bubble-rise { animation: ao-rise 1.1s ease-in infinite; }
+  @keyframes ao-rise { from { transform: translateY(0); opacity: .9; } to { transform: translateY(-14px); opacity: 0; } }
+  .ao-ringing { animation: ao-shake .12s linear infinite; }
+  @keyframes ao-shake { 0%, 100% { transform: translateX(-1px); } 50% { transform: translateX(1px); } }
+  .ao-flicker { animation: ao-flicker .35s ease-in-out infinite alternate; transform-box: view-box; }
+  @keyframes ao-flicker { from { transform: scaleY(.85); opacity: .85; } to { transform: scaleY(1.08); opacity: 1; } }
+  .ao-fire { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); width: max-content; max-width: calc(100% - 20px); padding: 8px 14px; border-radius: 14px; background: rgba(120,30,10,.94); color: #fff; font-weight: 700; text-align: center; pointer-events: none; box-shadow: 0 6px 20px rgba(0,0,0,.3); }
+  .ao-hire-card { width: min(440px, 100%); display: flex; flex-direction: column; gap: 10px; box-shadow: 0 12px 40px rgba(0,0,0,.3); }
+  .ao-hire-card h2 { margin: 0; }
+  .ao-hire-card p { margin: 0; }
+  .ao-hire-field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: 600; }
+  .ao-hire-field input, .ao-hire-field textarea { padding: 9px 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface-2, #242427); color: var(--text); font: inherit; font-size: 16px; font-weight: 400; line-height: 1.4; resize: vertical; }
+  .ao-hire-field input:focus, .ao-hire-field textarea:focus { outline: none; border-color: var(--accent); }
+  .ao-hire-problem { font-size: 12.5px; color: #ffb4b4; }
+  .ao-hire-actions { display: flex; justify-content: flex-end; gap: 8px; }
+  .ao-primary { background: #6d5dfc; border-color: #6d5dfc; color: #fff; }
+  .ao-primary:disabled { opacity: .5; cursor: not-allowed; }
+  .ao-toast-btn { pointer-events: auto; margin-left: 10px; }
   .ao-recap-list { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; line-height: 1.45; }
   .ao-pulse { animation: ao-pulse 1.4s ease-in-out infinite; }
   @keyframes ao-pulse { 0%, 100% { opacity: 1 } 50% { opacity: .78 } }
-  @media (prefers-reduced-motion: reduce) { .ao-pulse, .ao-walking { animation: none; } .ao-leaving { animation: none; opacity: 0; } .ao-poof { display: none; } }
+  @media (prefers-reduced-motion: reduce) { .ao-pulse, .ao-walking, .ao-from-lift, .ao-bubble-rise, .ao-ringing, .ao-flicker { animation: none; } .ao-to-lift { animation: none; opacity: 0; } .ao-leaving { animation: none; opacity: 0; } .ao-poof { display: none; } }
 `

@@ -10,7 +10,10 @@ import re
 from datetime import UTC, datetime, timedelta
 
 ACTIVE_WINDOW = timedelta(hours=24)
-MAX_CHARACTERS = 30
+# A building of 4 floors with 8 desks each (spec 2026-10-08 §4).
+FLOORS = 4
+DESKS_PER_FLOOR = 8
+MAX_CHARACTERS = FLOORS * DESKS_PER_FLOOR
 BUBBLE_MAX = 28
 FILE_MAX = 32
 
@@ -198,7 +201,7 @@ def _in_office(chat, now):
 
 
 def select_chats(chats, now):
-    """The owner's chats that belong in the office, busiest and most recent first, at most 30."""
+    """The owner's chats that belong in the office, busiest and most recent first, at most MAX_CHARACTERS."""
     present = [chat for chat in chats if _in_office(chat, now)]
     present.sort(key=lambda chat: (
         chat_state(chat) == "on_break",
@@ -219,7 +222,6 @@ LEAD_SLOT = (1.4, 0.2)
 # don't stack on one row (front-left, back-right, front-right, back-left, front-centre).
 HELPER_SLOTS = [(0.1, 1.6), (2.7, 0.2), (2.7, 1.6), (0.1, 0.2), (1.4, 1.6)]
 MAX_VISIBLE_HELPERS = 5
-POD_MEMORY = timedelta(hours=24)
 SHORT_NAME_MAX = 16
 
 _HAIR = ["#3b2a20", "#d9a441", "#1f1f28", "#7a3e2b", "#2d2d2d", "#b05a2c"]
@@ -231,47 +233,55 @@ def pod_origin(slot):
     return (0.5 + (slot % PODS_PER_ROW) * POD_W, 0.5 + (slot // PODS_PER_ROW) * POD_D)
 
 
-def floor_depth(max_slot):
-    return max(9, POD_D * (max_slot // PODS_PER_ROW + 1))
+ROOM_DEPTH = 11  # 9 tiles of pods plus a 2-tile lobby along the front (spec 2026-10-08 §4)
+EGGS = {1: "internet", 2: "watercooler", 3: "phone", 4: "fire"}
+# Who gets floor 1 first (spec 2026-10-08 §5): needs you, then working, then the rest.
+RANK = {"needs_you": 0, "working": 1, "error": 2, "watching": 3, "on_break": 4}
 
 
-SEEN_REFRESH = timedelta(minutes=10)
+def _valid_desk(entry):
+    return (isinstance(entry, dict) and entry.get("floor") in range(1, FLOORS + 1)
+            and isinstance(entry.get("slot"), int) and not isinstance(entry.get("slot"), bool)
+            and 0 <= entry["slot"] < DESKS_PER_FLOOR)
 
 
-def _lowest_free_slot(taken):
-    return next(slot for slot in range(10_000) if slot != COFFEE_SLOT and slot not in taken)
+def assign_floors(chats, previous):
+    """Who sits where (spec 2026-10-08 §5): the busiest by state on floor 1, 8 desks a floor.
 
-
-def assign_pods(chat_ids, previous, now):
-    """Stable pod slots: a chat keeps its slot while it stays in the office.
-
-    A chat that left keeps its slot for 24 h so it sits back at its own desk if
-    it returns, but only while there is room: when a free desk would make the
-    room bigger, a newcomer takes the lowest desk an absent chat was keeping.
-    The coffee corner's slot is never handed out. `last_seen` is refreshed at
-    most every 10 minutes, so an unchanged office leaves the map unchanged.
+    Sorting by (rank, the floor a chat was on, most recent first) keeps equal-rank chats on
+    their floor while their activity reshuffles; floor 1 only changes when a busier chat needs a
+    desk. A chat that stays on its floor keeps its desk (and its helpers' desk map); an arrival
+    takes the lowest free desk. Slots 0-7 are the desks; slot 8 is the floor's corner. An old
+    or odd entry (no floor, or a slot outside 0-7) counts as a newcomer.
     """
-    present = set(chat_ids)
+    previous = previous if isinstance(previous, dict) else {}
+
+    def order(chat):
+        entry = previous.get(chat["id"])
+        floor = entry["floor"] if _valid_desk(entry) else FLOORS + 1
+        return (RANK[chat_state(chat)], floor, -(parse_time(chat.get("activity_at")) or _EPOCH).timestamp())
+
+    ordered = sorted(chats, key=order)[:MAX_CHARACTERS]
+    floor_of = {chat["id"]: index // DESKS_PER_FLOOR + 1 for index, chat in enumerate(ordered)}
+    taken = {floor: set() for floor in range(1, FLOORS + 1)}
     pods = {}
-    for chat_id, entry in previous.items():
-        seen = parse_time(entry.get("last_seen"))
-        if chat_id in present or (seen is not None and now - seen <= POD_MEMORY):
-            pods[chat_id] = dict(entry)
-    for chat_id in chat_ids:
-        if chat_id in pods:
+    for chat in ordered:
+        entry, floor = previous.get(chat["id"]), floor_of[chat["id"]]
+        if _valid_desk(entry) and entry["floor"] == floor and entry["slot"] not in taken[floor]:
+            pods[chat["id"]] = {"floor": floor, "slot": entry["slot"]}
+            helpers = entry.get("helpers") if isinstance(entry.get("helpers"), dict) else {}
+            kept = {hid: slot for hid, slot in helpers.items()
+                    if isinstance(slot, int) and not isinstance(slot, bool) and 0 <= slot < MAX_VISIBLE_HELPERS}
+            if kept:
+                pods[chat["id"]]["helpers"] = kept
+            taken[floor].add(entry["slot"])
+    for chat in ordered:
+        if chat["id"] in pods:
             continue
-        slot = _lowest_free_slot({entry["slot"] for entry in pods.values()})
-        needed = floor_depth(max((pods[c]["slot"] for c in chat_ids if c in pods), default=0))
-        if floor_depth(slot) > needed:
-            kept_for_absent = sorted((entry["slot"], c) for c, entry in pods.items() if c not in present)
-            if kept_for_absent and kept_for_absent[0][0] < slot:
-                slot, absent = kept_for_absent[0]
-                del pods[absent]
-        pods[chat_id] = {"slot": slot}
-    for chat_id in chat_ids:
-        seen = parse_time(pods[chat_id].get("last_seen"))
-        if seen is None or now - seen >= SEEN_REFRESH:
-            pods[chat_id]["last_seen"] = now.isoformat()
+        floor = floor_of[chat["id"]]
+        slot = min(set(range(DESKS_PER_FLOOR)) - taken[floor])
+        taken[floor].add(slot)
+        pods[chat["id"]] = {"floor": floor, "slot": slot}
     return pods
 
 
@@ -334,23 +344,26 @@ def build_snapshot(chats, details, teams, pods, office_progress, now):
 
     `details` holds chat details for `working` chats only; a working chat
     without one (vanished, or skipped under the time budget) shows "Working".
-    `teams` comes from `build_teams`; `pods` from `assign_pods` plus
+    `teams` comes from `build_teams`; `pods` from `assign_floors` plus
     `assign_helper_desks`, so every desk here is the persisted one.
     """
     chat_progress = office_progress.get("chats", {})
     counts = dict.fromkeys(COUNT_KEYS, 0)
+    floor_counts = {floor: dict.fromkeys(COUNT_KEYS, 0) for floor in range(1, FLOORS + 1)}
     characters, team_rows = [], []
     for chat in chats:
         chat_id = chat["id"]
         state = chat_state(chat)
+        floor = pods[chat_id]["floor"]
         counts[state] += 1
+        floor_counts[floor][state] += 1
         origin = pod_origin(pods[chat_id]["slot"])
         progress = chat_progress.get(chat_id, {})
         character = {
             "id": chat_id, "kind": "chat", "chat_id": chat_id,
             "name": chat.get("title") or "Untitled chat", "short": short_name(chat.get("title")),
             "state": state, "level": progress.get("level", 1), "xp_progress": progress.get("xp_progress", 0.0),
-            "queued": 0, "desk": _desk(origin, LEAD_SLOT), "look": look_for(chat_id),
+            "queued": 0, "desk": _desk(origin, LEAD_SLOT), "floor": floor, "look": look_for(chat_id),
             "dismissable": True,
             # What a strike would also cancel, whatever state is on show: an
             # armed timer can sit under "working", a question under "needs you".
@@ -372,18 +385,18 @@ def build_snapshot(chats, details, teams, pods, office_progress, now):
             characters.append({
                 "id": helper["id"], "kind": "helper", "chat_id": chat_id, "lead_id": chat_id,
                 "parent_id": helper["parent_id"], "name": helper["name"], "short": helper["name"],
-                "state": helper["pose"], "desk": _desk(origin, HELPER_SLOTS[helper_desks[helper["id"]]]),
+                "state": helper["pose"], "desk": _desk(origin, HELPER_SLOTS[helper_desks[helper["id"]]]), "floor": floor,
                 "look": look_for(helper["id"]), "dismissable": helper["dismissable"],
             })
         if visible:
             team_rows.append({"lead_id": chat_id, "member_ids": [helper["id"] for helper in visible]})
-    max_slot = max((pods[chat["id"]]["slot"] for chat in chats), default=0)
     return {
         "ok": True,
         "generated_at": now.isoformat(),
         "office": {key: office_progress[key] for key in ("level", "xp", "level_start_xp", "next_level_xp")},
         "counts": counts,
-        "room": {"width": ROOM_WIDTH, "depth": floor_depth(max_slot)},
+        "room": {"width": ROOM_WIDTH, "depth": ROOM_DEPTH, "floors": FLOORS},
+        "floors": [{"floor": floor, "egg": EGGS[floor], "counts": floor_counts[floor]} for floor in range(1, FLOORS + 1)],
         "characters": characters,
         "teams": team_rows,
     }

@@ -18,6 +18,7 @@ export function createApi(appId, token, fetchImpl = (...args) => fetch(...args))
     progress: (workingNow = 0, tz = '') => call(`progress?working_now=${Math.max(0, Math.floor(workingNow) || 0)}${tz ? `&tz=${encodeURIComponent(tz)}` : ''}`),
     sword: (kind, id) => call('sword', { method: 'POST', body: JSON.stringify({ kind, id }) }),
     internet: on => call('internet', { method: 'POST', body: JSON.stringify({ on }) }),
+    hire: (title, text, cid) => call('hire', { method: 'POST', body: JSON.stringify({ title, text, cid }) }),
     thread: chatId => call(`thread?chat_id=${encodeURIComponent(chatId)}`),
     reply: (chatId, text, cid) => call('reply', { method: 'POST', body: JSON.stringify({ chat_id: chatId, text, cid }) }),
     answer: (chatId, questionId, picks, text, cid) => call('answer', {

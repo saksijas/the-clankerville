@@ -99,7 +99,7 @@ class FakeFeed:
     """Answers like Möbius's owner API from memory; records the actions taken."""
 
     def __init__(self, chats=(), delegations=(), details=None, stop=None, cancel=None, delete=None,
-                 runs=(), helpers=(), apps=(), page_size=500, threads=None, send=None):
+                 runs=(), helpers=(), apps=(), page_size=500, threads=None, send=None, create=None, rename=()):
         self.runs = [dict(r, update_id=i + 1) for i, r in enumerate(runs)]
         self.helpers = [dict(e, id=i + 1) for i, e in enumerate(helpers)]
         self.apps = [dict(a) for a in apps]
@@ -115,6 +115,8 @@ class FakeFeed:
         self.detail_calls = []
         self.threads = dict(threads or {})  # chat_id -> chat detail, or a FeedError to raise
         self.send_reply = send  # Möbius's reply to a sent message, or a FeedError to raise
+        self.create_failure = create  # a FeedError for create_chat to raise, or None
+        self.rename_failures = list(rename)  # FeedErrors for successive rename_chat calls to raise
         self.sent = []  # (chat_id, body) for every message sent
         self.beside = []  # (chat_id, app_id) for every open-beside request
 
@@ -177,6 +179,18 @@ class FakeFeed:
         if isinstance(self.send_reply, Exception):
             raise self.send_reply
         return self.send_reply if self.send_reply is not None else {"status": "started"}
+
+    def create_chat(self, chat_id, title):
+        self.actions.append(("create", chat_id, title))
+        if self.create_failure is not None:
+            raise self.create_failure
+        return {"id": chat_id, "title": title}
+
+    def rename_chat(self, chat_id, title):
+        self.actions.append(("rename", chat_id, title))
+        if self.rename_failures:
+            raise self.rename_failures.pop(0)
+        return {"id": chat_id, "title": title}
 
     def open_beside(self, chat_id, app_id):
         self.beside.append((chat_id, app_id))

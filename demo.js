@@ -4,19 +4,26 @@
 const look = (hair, shirt, skin) => ({ hair, shirt, skin })
 
 const chat = (id, name, short, state, level, desk, lookValue, extra = {}) => ({
-  id, kind: 'chat', chat_id: id, name, short, state, level, xp_progress: 0.4, queued: 0, desk, look: lookValue, dismissable: true, ...extra,
+  id, kind: 'chat', chat_id: id, name, short, state, level, xp_progress: 0.4, queued: 0, desk, floor: 1, look: lookValue, dismissable: true, ...extra,
 })
 
 const helper = (id, lead, name, state, desk, lookValue, dismissable = true) => ({
-  id, kind: 'helper', chat_id: lead, lead_id: lead, parent_id: null, name, short: name, state, desk, look: lookValue, dismissable,
+  id, kind: 'helper', chat_id: lead, lead_id: lead, parent_id: null, name, short: name, state, desk, floor: 1, look: lookValue, dismissable,
 })
 
 export const DEMO_SNAPSHOT = {
   ok: true,
   generated_at: '2026-09-28T17:00:00+00:00',
   office: { level: 4, xp: 320, level_start_xp: 300, next_level_xp: 500 },
-  counts: { working: 3, needs_you: 1, error: 1, watching: 0, on_break: 1 },
-  room: { width: 13, depth: 9 },
+  counts: { working: 3, needs_you: 1, error: 1, watching: 1, on_break: 6 },
+  room: { width: 13, depth: 11, floors: 4 },
+  // The busiest on floor 1 (spec 2026-10-08 §5); four on a break upstairs by the watercooler.
+  floors: [
+    { floor: 1, egg: 'internet', counts: { working: 3, needs_you: 1, error: 1, watching: 1, on_break: 2 } },
+    { floor: 2, egg: 'watercooler', counts: { working: 0, needs_you: 0, error: 0, watching: 0, on_break: 4 } },
+    { floor: 3, egg: 'phone', counts: { working: 0, needs_you: 0, error: 0, watching: 0, on_break: 0 } },
+    { floor: 4, egg: 'fire', counts: { working: 0, needs_you: 0, error: 0, watching: 0, on_break: 0 } },
+  ],
   characters: [
     chat('demo-lead', 'Agent office brainstorm', 'Brainstorm', 'working', 3, { x: 1.9, y: 0.7 }, look('#3b2a20', '#6d5dfc', '#f2c9a0'), { step: 'Drawing office mockups' }),
     helper('demo-h1', 'demo-lead', 'pixel-sketcher', 'busy', { x: 0.6, y: 2.1 }, look('#d9a441', '#2fb3a3', '#e0ac7e')),
@@ -28,6 +35,12 @@ export const DEMO_SNAPSHOT = {
     chat('demo-trip', 'Trip planner', 'Trip planner', 'error', 2, { x: 1.9, y: 3.7 }, look('#b05a2c', '#7c8a9e', '#f0c8a8')),
     chat('demo-report', 'Weekly report', 'Weekly report', 'working', 1, { x: 5.9, y: 3.7 }, look('#1f1f28', '#9bc53d', '#e8b793'), { step: 'Editing report.md' }),
     chat('demo-new', 'New chat', 'New chat', 'on_break', 1, { x: 9.9, y: 3.7 }, look('#5a4632', '#2fb3a3', '#e8b793')),
+    chat('demo-wiki', 'Team wiki', 'Team wiki', 'watching', 2, { x: 1.9, y: 6.7 }, look('#3b2a20', '#e85d75', '#e0ac7e')),
+    chat('demo-snake', 'Snake game', 'Snake game', 'on_break', 1, { x: 5.9, y: 6.7 }, look('#d9a441', '#6d5dfc', '#f5d1b5')),
+    chat('demo-maps', 'Maps', 'Maps', 'on_break', 2, { x: 1.9, y: 0.7 }, look('#1f1f28', '#4c9be8', '#8d5a3b'), { floor: 2 }),
+    chat('demo-weather', 'Weather', 'Weather', 'on_break', 2, { x: 5.9, y: 0.7 }, look('#7a3e2b', '#9bc53d', '#f2c9a0'), { floor: 2 }),
+    chat('demo-beats', 'Beat machine', 'Beat machine', 'on_break', 1, { x: 9.9, y: 0.7 }, look('#b05a2c', '#f08a5d', '#e8b793'), { floor: 2 }),
+    chat('demo-recipes', 'Recipe box', 'Recipe box', 'on_break', 1, { x: 1.9, y: 3.7 }, look('#2d2d2d', '#2fb3a3', '#c68a62'), { floor: 2 }),
   ],
   teams: [{ lead_id: 'demo-lead', member_ids: ['demo-h1', 'demo-h2', 'demo-h3'] }],
 }

@@ -27,15 +27,17 @@
     "ui/StatusStrip.jsx",
     "ui/DetailCard.jsx",
     "ui/QuickReply.jsx",
-    "ui/Recap.jsx"
+    "ui/Recap.jsx",
+    "ui/FloorPicker.jsx",
+    "ui/HireForm.jsx"
   ],
   "store": {
     "tagline": "Watch your Möbius agents work in a little pixel office, answer them with a tap, and level up.",
-    "description": "The Clankerville turns your Möbius chats into a live isometric office. Every chat is a character at a desk: it types while it works, waves when it needs you, smokes when something broke, and heads to the coffee corner when it's on a break. Chats that start helpers sit together as a team.\n\nTap anyone to see what they're doing and what they last said, answer their question with a tap, or send a quick reply. On a computer, Open chat puts the full chat beside the office. Finished work earns XP: chats and the office level up, and a recap tells you what happened yesterday. The sword (press and hold) deletes a chat you're done with, recoverable for 7 days, or dismisses a single helper. There's also a hidden switch for the curious: pressing it twice stops every working chat, cancelling its helpers and queued messages, until you switch it back on. Only do that if you mean it.\n\nWhat it does with your access: The Clankerville's service uses your full owner key, so it can do anything you can on your Möbius. Möbius has no narrower permission for seeing and steering agents yet, so the install screen won't list one. It reads your chats and helpers to draw the office, and it stops, deletes or messages a chat only when you use the sword, a quick reply or that switch. It talks only to your own Möbius, never to another server, and secret and restart cards always stay in the full chat. Review its updates before you install them. Demo mode shows a sample office if you have no chats yet.",
+    "description": "The Clankerville turns your Möbius chats into a live isometric office. Every chat is a character at a desk: it types while it works, waves when it needs you, smokes when something broke, and heads to the coffee corner when it's on a break. Chats that start helpers sit together as a team. The office is a 4-floor building: the busiest agents work on floor 1, and you walk around as your own character and take the elevator.\n\nTap anyone to see what they're doing and what they last said, answer their question with a tap, or send a quick reply. On a computer, Open chat puts the full chat beside the office. Finished work earns XP: chats and the office level up, and a recap tells you what happened yesterday. The sword (press and hold) deletes a chat you're done with, recoverable for 7 days, or dismisses a single helper. A hiring desk starts new chats when you fill out its form. Each floor hides a surprise, and there's a hidden switch for the curious: pressing it twice stops every working chat, cancelling its helpers and queued messages, until you switch it back on. Only do that if you mean it.\n\nWhat it does with your access: The Clankerville's service uses your full owner key, so it can do anything you can on your Möbius. Möbius has no narrower permission for seeing and steering agents yet, so the install screen won't list one. It reads your chats and helpers to draw the office, and it stops, deletes, messages or starts a chat only when you use the sword, a quick reply, that switch or the hiring desk. It talks only to your own Möbius, never to another server, and secret and restart cards always stay in the full chat. Review its updates before you install them. Demo mode shows a sample office if you have no chats yet.",
     "screenshots": [
       {
         "src": "static/store/office-web.png",
-        "alt": "The office on a computer: chats as pixel characters at desks, with status bubbles, helper teams, a coffee corner and the office level.",
+        "alt": "The office on a computer: chats as pixel characters at desks with status bubbles, a lobby with the elevator, the CR hiring desk and you, on floor 1 of 4.",
         "label": "Your agents at work"
       },
       {

@@ -1,9 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createApi } from './api.js'
 import { DEMO_SNAPSHOT } from './demo.js'
-import { INTERNET_ARM_MS, createHold, createVisibilityGate, createVisiblePoller, departureDelays, holdMs, internetClick, internetToast, localDay, nextPollDelay, officeView, openMode, progressNews, shouldAutoOpenRecap, swordToast, watchReducedMotion } from './domain.js'
+import { INTERNET_ARM_MS, WALKER_SPEED, arrowStop, createHold, eggMoment, elevatorSpot, hireToast, floorBadges, floorLabel, floorMoves, keysFree, nearElevator, walkerAt, walkerTarget, createVisibilityGate, createVisiblePoller, departureDelays, holdMs, internetClick, internetToast, localDay, toastMs, nextPollDelay, officeView, openMode, progressNews, shouldAutoOpenRecap, swordToast, watchReducedMotion } from './domain.js'
 import { CSS } from './theme.js'
 import DetailCard from './ui/DetailCard.jsx'
+import FloorPicker from './ui/FloorPicker.jsx'
+import HireForm from './ui/HireForm.jsx'
 import Recap from './ui/Recap.jsx'
 import Scene from './ui/Scene.jsx'
 import StatusStrip from './ui/StatusStrip.jsx'
@@ -185,10 +187,120 @@ export default function App({ appId, token }) {
   const shownRef = useRef(shown)
   shownRef.current = shown
 
-  const say = text => {
+  // Floors (spec 2026-10-08 §7.1): the floor you're on, the elevator's list, and who just moved.
+  const [viewFloor, setViewFloor] = useState(1)
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [moves, setMoves] = useState({ arrivals: new Set(), ghosts: [] })
+  const lastSnapRef = useRef(null)
+  useEffect(() => {
+    if (!shown) return undefined
+    const before = lastSnapRef.current
+    lastSnapRef.current = { snap: shown, demo }
+    // Switching the demo on or off swaps the whole office: that isn't anyone riding the elevator.
+    if (!before || before.snap === shown || before.demo !== demo) return undefined
+    const previousFloors = Object.fromEntries(before.snap.characters.map(c => [c.id, c.floor || 1]))
+    const { arrivals, departures } = floorMoves(previousFloors, shown.characters, viewFloor)
+    const ghosts = before.snap.characters.filter(c => departures.includes(c.id))
+    setMoves({ arrivals, ghosts })
+    if (!arrivals.size && !ghosts.length) return undefined
+    const t = setTimeout(() => setMoves({ arrivals: new Set(), ghosts: [] }), 1600)
+    return () => clearTimeout(t)
+  }, [shown, viewFloor, demo])
+  const goToFloor = floor => {
+    if (floor === viewFloor) { closePicker(); return }
+    setViewFloor(floor)
+    setPickerOpen(false)
+    setSelectedId(null)
+    setMoves({ arrivals: new Set(), ghosts: [] })
+  }
+  // Staying put steps him back out of the elevator, so he isn't stuck re-opening it.
+  const closePicker = () => {
+    setPickerOpen(false)
+    if (walkerRef.current && nearElevator(walkerAt(walkerRef.current, Date.now()), room)) stepOut()
+  }
+
+  // The CR desk (spec 2026-10-08 §7.4). One id per opened form, so a retried Hire reuses the same chat.
+  const [hire, setHire] = useState(null) // { cid, busy } while the form is open
+  const openHire = () => setHire({ cid: `hire-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, busy: false })
+
+  // Easter eggs on floors 2-4 (spec 2026-10-08 §7.3): when each floor's egg was last set off.
+  const [eggAt, setEggAt] = useState({})
+  const [eggNow, setEggNow] = useState(() => Date.now())
+  useEffect(() => {
+    const started = eggAt[viewFloor]
+    if (!started) return undefined
+    const tick = setInterval(() => {
+      const now = Date.now()
+      setEggNow(now)
+      if (now - started > 9000) clearInterval(tick)
+    }, 250)
+    return () => clearInterval(tick)
+  }, [eggAt, viewFloor])
+
+  // The walking man (spec 2026-10-08 §7.2): steps out of the elevator on each floor, walks where
+  // you tap or while you hold an arrow key, and opens the floor list when he walks into the elevator.
+  const room = shown?.room || { width: 13, depth: 11, floors: 4 }
+  const [walker, setWalker] = useState(null) // { from, to, at, aim }
+  const [walkerNow, setWalkerNow] = useState(() => Date.now())
+  const walkerRef = useRef(walker)
+  walkerRef.current = walker
+  const keysBusyRef = useRef(false)
+  const pressStartRef = useRef(null)
+  const walkTo = useCallback((to, aim = null) => {
+    const now = Date.now()
+    const current = walkerRef.current
+    setWalkerNow(now)
+    setWalker({ from: current ? walkerAt(current, now) : to, to, at: now, aim })
+  }, [])
+  const stepOut = useCallback(() => {
+    const lift = elevatorSpot(room)
+    const now = Date.now()
+    setWalkerNow(now)
+    setWalker({ from: [lift.x, lift.y], to: [lift.x + 1.2, lift.y - 0.4], at: now, aim: null })
+  }, [room.depth])
+  useEffect(() => { stepOut() }, [viewFloor, stepOut])
+  useEffect(() => {
+    if (!walker) return undefined
+    const arriveAt = walker.at + (Math.hypot(walker.to[0] - walker.from[0], walker.to[1] - walker.from[1]) / WALKER_SPEED) * 1000
+    const arrive = () => { if (walker.aim === 'lift') { setPickerOpen(true); setWalker(w => (w ? { ...w, aim: null } : w)) } }
+    if (Date.now() >= arriveAt) { arrive(); return undefined }
+    const tick = setInterval(() => {
+      const now = Date.now()
+      setWalkerNow(now)
+      if (now >= arriveAt) { clearInterval(tick); arrive() }
+    }, 60)
+    return () => clearInterval(tick)
+  }, [walker])
+  useEffect(() => {
+    const isArrow = key => key === 'ArrowUp' || key === 'ArrowDown' || key === 'ArrowLeft' || key === 'ArrowRight'
+    const free = () => keysFree({ dialogOpen: keysBusyRef.current, focusTag: document.activeElement?.tagName })
+    const down = event => {
+      if (!isArrow(event.key) || event.repeat || !free() || !walkerRef.current) return
+      const here = walkerAt(walkerRef.current, Date.now())
+      const target = walkerTarget(here, event.key, room)
+      if (!target) return
+      event.preventDefault()
+      pressStartRef.current = here
+      walkTo(target)
+    }
+    const up = event => {
+      if (!isArrow(event.key) || !free() || !walkerRef.current || !pressStartRef.current) return
+      const start = pressStartRef.current
+      pressStartRef.current = null
+      // He stops where he is, or a whole tile on for a short press; walking into the lift opens it,
+      // unless the press began there (stepping away from it shouldn't reopen it).
+      const stop = arrowStop(start, walkerAt(walkerRef.current, Date.now()), event.key, room)
+      walkTo(stop, !nearElevator(start, room) && nearElevator(stop, room) ? 'lift' : null)
+    }
+    window.addEventListener('keydown', down)
+    window.addEventListener('keyup', up)
+    return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up) }
+  }, [walkTo, room.width, room.depth])
+
+  const say = (text, action = null) => {
     const id = Date.now()
-    setToast({ id, text })
-    setTimeout(() => setToast(current => (current && current.id === id ? null : current)), 6500)
+    setToast({ id, text, action })
+    setTimeout(() => setToast(current => (current && current.id === id ? null : current)), toastMs(action))
   }
 
   // The Internet box (the coffee corner's black box), a hidden switch: the first press arms it
@@ -331,9 +443,33 @@ export default function App({ appId, token }) {
     refresh()
     window.mobius?.signal?.('internet_switch', { on: turningOn, ok: Boolean(result.ok) })
   }
+  const floorsList = shown.floors || [{ floor: 1, egg: 'internet', counts: shown.counts }]
+  const floorsCount = shown.room?.floors || floorsList.length
+  const badges = floorBadges(shown)
+  const eggKind = floorsList.find(fl => fl.floor === viewFloor)?.egg
+  const egg = eggKind && eggKind !== 'internet' ? { kind: eggKind, ...eggMoment(eggKind, eggAt[viewFloor], eggNow) } : null
+  const pressEgg = () => {
+    const now = Date.now()
+    setEggNow(now)
+    setEggAt(started => ({ ...started, [viewFloor]: now }))
+  }
+  const otherFloorNeedsYou = [...badges].some(floor => floor !== viewFloor)
   const empty = !demo && shown.characters.length === 0
   const recapShown = recapOpen && !demo && Boolean(progress?.recap)
+  const submitHire = async (name, text) => {
+    if (demo) { setHire(null); say(`Hired ${name}. (Demo: nobody was hired.)`); return }
+    const { cid } = hire
+    const mine = current => current && current.cid === cid // a newer form isn't this hire's to close
+    setHire(current => (mine(current) ? { ...current, busy: true } : current))
+    const result = await api.hire(name, text, cid)
+    if (result.ok || result.created) setHire(current => (mine(current) ? null : current))
+    else setHire(current => (mine(current) ? { ...current, busy: false } : current))
+    say(hireToast(result, name), result.created && !result.ok ? { label: 'Open chat', run: () => openChat(result.chat_id) } : null)
+    refresh()
+  }
   const selected = shown.characters.find(c => c.id === selectedId) || null
+  // Arrow keys belong to whatever is open: a card, the elevator, the recap or the hire form.
+  keysBusyRef.current = pickerOpen || recapShown || Boolean(hire) || Boolean(selected)
   const leadId = selected ? (selected.kind === 'helper' ? selected.lead_id : selected.id) : null
   const lead = shown.characters.find(c => c.id === leadId)
   const teamRow = shown.teams.find(t => t.lead_id === leadId)
@@ -362,14 +498,21 @@ export default function App({ appId, token }) {
           <button type="button" className="ao-btn" onClick={() => updatePrefs({ demo: false })}>Exit demo</button>
         </div>
       )}
-      <div className="ao-layout" inert={recapShown ? true : undefined}>
+      <div className="ao-layout" inert={recapShown || pickerOpen || hire ? true : undefined}>
         <section className="ao-main">
           <StatusStrip office={shown.office} counts={shown.counts} stale={stale && !demo} swordOn={swordOn} onSword={toggleSword}
-            onRecap={!demo && progress?.recap ? () => setRecapOpen(true) : undefined} />
+            onRecap={!demo && progress?.recap ? () => setRecapOpen(true) : undefined}
+            floorName={floorLabel(viewFloor, floorsCount)} floorDot={otherFloorNeedsYou} onElevator={() => setPickerOpen(true)} />
           <div className="ao-scene" style={swordOn ? { cursor: SWORD_CURSOR } : undefined}>
             <Scene snap={shown} f={f} selectedId={selectedId} onSelect={setSelectedId} onPress={startHold} onRelease={cancelHold}
               swordOn={swordOn} hold={hold} departed={departed}
-              internetOff={internet.off} internetArmed={Boolean(internetArmed)} onInternet={pressInternet} />
+              internetOff={internet.off} internetArmed={Boolean(internetArmed)} onInternet={pressInternet}
+              viewFloor={viewFloor} floorDot={otherFloorNeedsYou} onElevator={() => setPickerOpen(true)}
+              arrivals={moves.arrivals} ghosts={moves.ghosts}
+              walker={walker ? walkerAt(walker, walkerNow) : null}
+              onWalk={point => walkTo(point, nearElevator(point, room) ? 'lift' : null)}
+              egg={egg} onEgg={pressEgg} onHire={openHire} />
+            {egg?.kind === 'fire' && egg.active && <div className="ao-fire" role="status">{egg.text}</div>}
             {swordOn && swordHint && <div className="ao-hint">Hold on someone: a chat is deleted, a helper dismissed · Tap Sword or press Esc to put it away</div>}
             {internetBusy && <div className="ao-hint">{internet.off ? 'Turning the Internet back on…' : 'Turning the Internet off…'}</div>}
             {internet.off && !internetBusy && (
@@ -384,7 +527,9 @@ export default function App({ appId, token }) {
                 <button type="button" className="ao-btn" onClick={() => updatePrefs({ demo: true })}>Show demo</button>
               </div>
             )}
-            <div className="ao-toast-wrap" aria-live="polite">{toast && <div className="ao-toast">{toast.text}</div>}</div>
+            <div className="ao-toast-wrap" aria-live="polite">{toast && (
+              <div className="ao-toast">{toast.text}{toast.action && <button type="button" className="ao-btn ao-toast-btn" onClick={toast.action.run}>{toast.action.label}</button>}</div>
+            )}</div>
           </div>
         </section>
         <DetailCard character={selected} team={team} overflow={selected?.kind === 'chat' ? selected.overflow || 0 : 0}
@@ -393,6 +538,8 @@ export default function App({ appId, token }) {
           api={api} demo={demo} openLabel={besideScreen ? 'Open chat' : 'Open full chat'} />
       </div>
       {recapShown && <Recap recap={progress.recap} chats={progress.chats} onClose={() => setRecapOpen(false)} />}
+      {hire && <HireForm busy={hire.busy} onHire={submitHire} onClose={() => setHire(null)} />}
+      {pickerOpen && <FloorPicker floors={floorsList} current={viewFloor} badges={badges} onPick={goToFloor} onClose={closePicker} />}
     </div>
   )
 }

@@ -464,3 +464,164 @@ test('the Internet box says what happened', () => {
   assert.equal(internetToast({ ok: true, off: false, told: 0, failed: 0, failed_names: [] }, true), 'The Internet is back on.')
   assert.equal(internetToast({ ok: false, error: { message: 'Möbius rejected the owner key.' } }, false), "The Internet didn't switch: Möbius rejected the owner key.")
 })
+
+// --- Floors, the lobby and the elevator (spec 2026-10-08) --------------------------------------
+
+import { DEMO_SNAPSHOT } from '../demo.js'
+import { doorSpan, elevatorSpan, elevatorSpot, crDeskSpot, onFloor, floorBadges, floorLabel } from '../domain.js'
+
+test('the lobby wall holds the door, then the elevator, with the sign before both', () => {
+  const room = { width: 13, depth: 11, floors: 4 }
+  const [d0, d1] = doorSpan(room)
+  const [e0, e1] = elevatorSpan(room)
+  assert.deepEqual([d0, d1, e0, e1], [9, 9.9, 10, 10.9])
+  assert.ok(d1 <= e0, 'door and elevator overlap')
+  const spot = elevatorSpot(room)
+  assert.ok(spot.y > e0 && spot.y < e1 && spot.x < 1)
+  assert.ok(signLayout('Night shift', 1, room.depth).to < d0, 'the sign runs into the door')
+  assert.ok(crDeskSpot(room).y >= 9 && crDeskSpot(room).x >= 1.5) // in the lobby, clear of the wall
+})
+
+test('each floor shows its own agents, helpers with their lead', () => {
+  const one = onFloor(DEMO_SNAPSHOT, 1)
+  const two = onFloor(DEMO_SNAPSHOT, 2)
+  assert.equal(one.filter(c => c.kind === 'chat').length, 8)
+  assert.equal(one.filter(c => c.kind === 'helper').length, 3)
+  assert.deepEqual(two.map(c => c.id).sort(), ['demo-beats', 'demo-maps', 'demo-recipes', 'demo-weather'])
+  assert.deepEqual(onFloor(DEMO_SNAPSHOT, 3), [])
+})
+
+test('floors where someone needs you get a dot, and the strip names the floor', () => {
+  assert.deepEqual([...floorBadges(DEMO_SNAPSHOT)], [1])
+  assert.deepEqual([...floorBadges({ floors: [] })], [])
+  assert.equal(floorLabel(2, 4), 'Floor 2 of 4')
+})
+
+import { floorSummary, floorMoves } from '../domain.js'
+
+test('the elevator says who is on each floor', () => {
+  assert.equal(floorSummary({ working: 3, needs_you: 1, error: 0, watching: 0, on_break: 2 }), '1 needs you · 3 working · 2 on break')
+  assert.equal(floorSummary({ working: 0, needs_you: 0, error: 1, watching: 1, on_break: 0 }), '1 error · 1 watching')
+  assert.equal(floorSummary({ working: 0, needs_you: 0, error: 0, watching: 0, on_break: 0 }), 'Nobody here yet')
+  assert.equal(floorSummary(undefined), 'Nobody here yet')
+})
+
+test('agents who changed floors walk in from, or out to, the elevator on the floor you watch', () => {
+  const before = { a: 1, b: 2, c: 1 }
+  const now = [{ id: 'a', floor: 2 }, { id: 'b', floor: 1 }, { id: 'c', floor: 1 }, { id: 'd', floor: 1 }]
+  const moves = floorMoves(before, now, 1)
+  assert.deepEqual([...moves.arrivals], ['b']) // d is new to the office, not an elevator arrival
+  assert.deepEqual(moves.departures, ['a'])
+  assert.deepEqual(floorMoves(before, now, 2).departures, ['b'])
+  assert.deepEqual([...floorMoves({}, now, 1).arrivals], [])
+})
+
+// --- The walking man (spec 2026-10-08 §7.2) -----------------------------------------------------
+
+import { WALKER_SPEED, walkerAt, walkerTarget, nearElevator, toFloorPoint, keysFree } from '../domain.js'
+
+const ROOM = { width: 13, depth: 11, floors: 4 }
+
+test('the walking man walks straight at 2.5 tiles a second', () => {
+  assert.equal(WALKER_SPEED, 2.5)
+  const walk = { from: [1, 1], to: [6, 1], at: 1000 }
+  assert.deepEqual(walkerAt(walk, 1000), [1, 1])
+  assert.deepEqual(walkerAt(walk, 2000), [3.5, 1])
+  assert.deepEqual(walkerAt(walk, 9000), [6, 1])
+})
+
+test('arrow keys aim far in a screen direction, inside the room', () => {
+  assert.deepEqual(walkerTarget([3, 3], 'ArrowUp', ROOM), [0.45, 0.45])
+  assert.deepEqual(walkerTarget([3, 3], 'ArrowDown', ROOM), [12.55, 10.55])
+  assert.equal(walkerTarget([3, 3], 'a', ROOM), null)
+})
+
+test('the elevator opens when he walks within half a tile of it', () => {
+  assert.equal(nearElevator([0.6, 10.3], ROOM), true)
+  assert.equal(nearElevator([1.5, 10.45], ROOM), false)
+})
+
+test('a tap on the floor maps back to the tile under it', () => {
+  const frame = roomFrame(ROOM.width, ROOM.depth)
+  const [sx, sy] = project(4.25, 7.5, 0, frame)
+  const [x, y] = toFloorPoint(sx, sy, frame)
+  assert.ok(Math.abs(x - 4.25) < 1e-9 && Math.abs(y - 7.5) < 1e-9)
+})
+
+test('arrow keys move him only when nothing else needs the keys', () => {
+  assert.equal(keysFree({ dialogOpen: false, focusTag: 'BODY' }), true)
+  assert.equal(keysFree({ dialogOpen: true, focusTag: 'BODY' }), false)
+  assert.equal(keysFree({ dialogOpen: false, focusTag: 'INPUT' }), false)
+  assert.equal(keysFree({ dialogOpen: false, focusTag: 'TEXTAREA' }), false)
+})
+
+// --- Easter eggs on floors 2-4 (spec 2026-10-08 §7.3) -------------------------------------------
+
+import { eggMoment, gossipFor, GOSSIP, PHONE_LINES, FIRE_TEXT, COOLER_EMPTY } from '../domain.js'
+
+test('the IT phone rings, then asks the question, then checks the plug', () => {
+  assert.deepEqual(eggMoment('phone', 1000, 1500), { active: true, ringing: true, text: null })
+  assert.deepEqual(eggMoment('phone', 1000, 3000), { active: true, ringing: false, text: 'Hello, IT. Have you tried turning it off and on again?' })
+  assert.deepEqual(eggMoment('phone', 1000, 6000), { active: true, ringing: false, text: 'Is it definitely plugged in?' })
+  assert.equal(eggMoment('phone', 1000, 8000).active, false)
+  assert.deepEqual(PHONE_LINES.length, 2)
+})
+
+test('the fire burns for 6 seconds with the emergency number', () => {
+  assert.equal(FIRE_TEXT, '🔥 Fire! Call 0118 999 881 999 119 725… 3')
+  assert.deepEqual(eggMoment('fire', 0, 1000), { active: true, text: FIRE_TEXT })
+  assert.equal(eggMoment('fire', 0, 6000).active, false)
+})
+
+test('the watercooler gossips for 8 seconds, each agent its own line', () => {
+  assert.equal(eggMoment('watercooler', 0, 7999).active, true)
+  assert.equal(eggMoment('watercooler', 0, 8000).active, false)
+  assert.equal(eggMoment('watercooler', 0, -1).active, false) // a clock step back doesn't start it
+  assert.equal(eggMoment('watercooler', null, 10).active, false)
+  assert.equal(gossipFor(0), GOSSIP[0])
+  assert.equal(gossipFor(GOSSIP.length + 1), GOSSIP[1])
+  assert.equal(COOLER_EMPTY, "Nobody's on break. Back to work!")
+})
+
+// --- The CR desk (spec 2026-10-08 §7.4) ---------------------------------------------------------
+
+import { hireProblem, hireToast } from '../domain.js'
+
+test('the hire form needs a name and a first message', () => {
+  assert.equal(hireProblem('', 'Do it'), 'Give your new hire a name.')
+  assert.equal(hireProblem('a'.repeat(81), 'Do it'), 'Names can be up to 80 characters.')
+  assert.equal(hireProblem('Fix login', '   '), 'Write what they should start on.')
+  assert.equal(hireProblem('Fix login', 'y'.repeat(8001)), 'The first message can be up to 8,000 characters.')
+  assert.equal(hireProblem('  Fix login ', 'Do it'), null)
+})
+
+test('hiring says what happened', () => {
+  assert.equal(hireToast({ ok: true, chat_id: 'c1' }, 'Fix login'), "Hired Fix login. They're heading to a desk.")
+  assert.equal(hireToast({ ok: false, created: true, chat_id: 'c1', error: { message: 'busy' } }, 'Fix login'),
+    "Fix login is hired, but their first message didn't send. Open the chat to send it.")
+  assert.equal(hireToast({ ok: false, error: { message: 'Möbius rejected the owner key.' } }, 'Fix login'),
+    "Couldn't hire Fix login: Möbius rejected the owner key.")
+})
+
+// --- Final review, Oct 8 ------------------------------------------------------------------------
+
+import { arrowStop, toastMs } from '../domain.js'
+
+test('a short arrow press still moves him one tile', () => {
+  const [x, y] = arrowStop([3, 3], [3.1, 3.1], 'ArrowDown', ROOM)
+  assert.ok(Math.abs(x - (3 + Math.SQRT1_2)) < 1e-9 && Math.abs(y - (3 + Math.SQRT1_2)) < 1e-9)
+  assert.deepEqual(arrowStop([3, 3], [5, 5], 'ArrowDown', ROOM), [5, 5]) // a long press stops where he is
+  assert.deepEqual(arrowStop([0.5, 0.5], [0.5, 0.5], 'ArrowUp', ROOM), [0.45, 0.45]) // still inside the room
+})
+
+test('hiring explains a name Möbius may change, and a first message it did not confirm', () => {
+  assert.equal(hireToast({ ok: true, chat_id: 'c1', name_locked: false }, 'Fix login'),
+    "Hired Fix login. They're heading to a desk, though Möbius may rename the chat from its first message.")
+  assert.equal(hireToast({ ok: false, created: true, chat_id: 'c1', error: { code: 'unconfirmed', message: 'x' } }, 'Fix login'),
+    "Fix login is hired, but Möbius didn't confirm their first message. Check the chat before sending it again.")
+})
+
+test('a toast with an action stays long enough to use it', () => {
+  assert.equal(toastMs(null), 6500)
+  assert.equal(toastMs({ label: 'Open chat' }), 15000)
+})

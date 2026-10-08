@@ -6,12 +6,12 @@ from service import dispatch
 
 
 def test_caps_and_stable_desks():  # Review Focus 5
-    chats = [chat(id=f"c{i}", running=True) for i in range(35)]
+    chats = [chat(id=f"c{i}", running=True) for i in range(40)]
     helpers = [d(f"h{i}", "c0") for i in range(8)]
     snap1 = run_snapshot(FakeFeed(chats, helpers), NOW)
     snap2 = run_snapshot(FakeFeed(chats, helpers), NOW + timedelta(seconds=3))
     leads = [c for c in snap1["characters"] if c["kind"] == "chat"]
-    assert len(leads) == 30
+    assert len(leads) == 32  # 4 floors of 8
     assert next(c for c in leads if c["id"] == "c0")["overflow"] == 3
     assert len([c for c in snap1["characters"] if c["kind"] == "helper"]) == 5
     assert {c["id"]: c["desk"] for c in snap1["characters"]} == {c["id"]: c["desk"] for c in snap2["characters"]}
@@ -20,7 +20,7 @@ def test_caps_and_stable_desks():  # Review Focus 5
 def test_snapshot_route_contract_and_feed_errors():
     body = dispatch({"method": "GET", "path": "snapshot"}, feed=FakeFeed([chat(id="c1", running=True)], []), now=NOW)["body"]
     assert body["ok"] is True and set(body["counts"]) == {"working", "needs_you", "error", "watching", "on_break"}
-    assert body["room"] == {"width": 13, "depth": 9}
+    assert body["room"] == {"width": 13, "depth": 11, "floors": 4}  # pods plus the lobby, 4 floors
     err = dispatch({"method": "GET", "path": "snapshot"}, feed=RaisingFeed("no_key"), now=NOW)
     assert err["status"] == 200 and err["body"] == {"ok": False, "error": {"code": "no_key", "message": ANY_STR}}
 
@@ -108,3 +108,20 @@ def test_characters_carry_the_timer_and_question_behind_their_state():
     assert by_id["busy"]["state"] == "working" and by_id["busy"]["waiting"] is True and by_id["busy"]["asking"] is False
     assert by_id["ask"]["state"] == "needs_you" and by_id["ask"]["asking"] is True and by_id["ask"]["queued"] == 2
     assert "step" not in by_id["ask"] and "ask" in feed.detail_calls
+
+
+def test_snapshot_carries_floors_room_and_each_characters_floor():
+    # Floors (spec 2026-10-08 §6): a character's floor, the room with its lobby, and each floor's egg and counts.
+    chats = [chat(id=f"w{i}", running=True) for i in range(9)]
+    team = [d("h1", "w0")]
+    snap = run_snapshot(FakeFeed(chats, team), NOW)
+    assert snap["room"] == {"width": 13, "depth": 11, "floors": 4}
+    assert [f["floor"] for f in snap["floors"]] == [1, 2, 3, 4]
+    assert [f["egg"] for f in snap["floors"]] == ["internet", "watercooler", "phone", "fire"]
+    by_id = {c["id"]: c for c in snap["characters"]}
+    assert all(1 <= c["floor"] <= 4 for c in snap["characters"])
+    assert by_id["h1"]["floor"] == by_id["w0"]["floor"]
+    leads_on = lambda n: [c for c in snap["characters"] if c["kind"] == "chat" and c["floor"] == n]
+    assert len(leads_on(1)) == 8 and len(leads_on(2)) == 1
+    assert snap["floors"][0]["counts"]["working"] == 8 and snap["floors"][1]["counts"]["working"] == 1
+    assert sum(f["counts"]["working"] for f in snap["floors"]) == snap["counts"]["working"]

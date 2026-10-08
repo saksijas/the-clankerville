@@ -31,4 +31,4 @@ def test_selection_rules():
 def test_cap_keeps_busy_first():
     rows = [chat(id=f"idle{i}", activity_at=NOW - timedelta(minutes=i)) for i in range(34)] + [chat(id="busy", running=True)]
     picked = select_chats(rows, NOW)
-    assert len(picked) == 30 and picked[0]["id"] == "busy" and "idle33" not in [c["id"] for c in picked]
+    assert len(picked) == 32 and picked[0]["id"] == "busy" and "idle33" not in [c["id"] for c in picked]  # 4 floors of 8

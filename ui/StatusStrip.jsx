@@ -13,7 +13,7 @@ export function SwordIcon() {
   )
 }
 
-export default function StatusStrip({ office, counts, stale, swordOn, onSword, onRecap }) {
+export default function StatusStrip({ office, counts, stale, swordOn, onSword, onRecap, floorName, floorDot, onElevator }) {
   const share = levelShare(office)
   return (
     <div className="ao-strip">
@@ -29,6 +29,12 @@ export default function StatusStrip({ office, counts, stale, swordOn, onSword, o
         {stale && <span className="ao-chip ao-stale" role="status">Reconnecting…</span>}
       </div>
       <div className="ao-tools">
+        {onElevator && (
+          <button type="button" className="ao-btn ao-floorbtn" onClick={onElevator}
+            aria-label={`${floorName}.${floorDot ? ' Someone needs you on another floor.' : ''} Open the elevator`}>
+            {floorName}{floorDot && <span className="ao-floordot" aria-hidden="true" />}
+          </button>
+        )}
         {onRecap && <button type="button" className="ao-btn" onClick={onRecap}>Recap</button>}
         {onSword && (
           <button type="button" className="ao-btn ao-swordbtn" aria-pressed={swordOn} onClick={onSword}>
