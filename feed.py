@@ -12,9 +12,19 @@ import json
 import os
 import time
 import urllib.request
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote
+
+
+def _utc(value):
+    """A Möbius timestamp (naive UTC ISO) as an aware datetime, or None."""
+    try:
+        moment = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return moment.replace(tzinfo=UTC) if moment.tzinfo is None else moment
 
 
 class FeedError(Exception):
@@ -107,6 +117,33 @@ class OwnerFeed:
     def rename_chat(self, chat_id, title):
         # An owner rename locks the name; otherwise Möbius renames a chat from its first message.
         return self._call("PATCH", f"/api/chats/{quote(chat_id, safe='')}", {"title": title})
+
+    def list_deleted_chats(self, limit=100, pages=5):
+        """Chats deleted in the last 7 days that Möbius can still recover (chat-logs, owner scope).
+
+        Deleted chats sort by when they were deleted, among live chats by activity, newest first;
+        once a page reaches past the 7-day window nothing later can be recoverable.
+        """
+        cutoff = datetime.now(UTC) - timedelta(days=7)
+        rows, cursor = [], 0
+        for _ in range(pages):
+            body = self._call("GET", f"/api/chat-logs?include_deleted=true&limit={int(limit)}&cursor={int(cursor)}")
+            page = body.get("items") or []
+            rows.extend(item for item in page if item.get("deleted_at"))
+            oldest = min((_utc(item.get("recency_at")) for item in page if item.get("recency_at")), default=None)
+            if body.get("next_cursor") is None or (oldest is not None and oldest < cutoff):
+                break
+            cursor = body["next_cursor"]
+        return rows
+
+    def recover_chat(self, chat_id):
+        # No body: Möbius's own Recover notification sends one; a plain owner recover doesn't.
+        try:
+            return self._call("POST", f"/api/chats/{quote(chat_id, safe='')}/recover")
+        except FeedError as exc:
+            if exc.code == "question_changed":  # 410: the 7 days are over
+                raise FeedError("too_late", "Too late: Möbius's 7 days to bring this chat back are over.") from None
+            raise
 
     def send_message(self, chat_id, body):
         # A reply or a question answer, exactly as the chat's own composer or card sends it.

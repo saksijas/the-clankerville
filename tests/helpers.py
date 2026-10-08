@@ -99,7 +99,8 @@ class FakeFeed:
     """Answers like Möbius's owner API from memory; records the actions taken."""
 
     def __init__(self, chats=(), delegations=(), details=None, stop=None, cancel=None, delete=None,
-                 runs=(), helpers=(), apps=(), page_size=500, threads=None, send=None, create=None, rename=()):
+                 runs=(), helpers=(), apps=(), page_size=500, threads=None, send=None, create=None, rename=(),
+                 deleted=(), recover=None):
         self.runs = [dict(r, update_id=i + 1) for i, r in enumerate(runs)]
         self.helpers = [dict(e, id=i + 1) for i, e in enumerate(helpers)]
         self.apps = [dict(a) for a in apps]
@@ -117,6 +118,8 @@ class FakeFeed:
         self.send_reply = send  # Möbius's reply to a sent message, or a FeedError to raise
         self.create_failure = create  # a FeedError for create_chat to raise, or None
         self.rename_failures = list(rename)  # FeedErrors for successive rename_chat calls to raise
+        self.deleted = list(deleted)  # chat-logs rows of recoverable deleted chats
+        self.recover_failure = recover  # a FeedError for recover_chat to raise, or None
         self.sent = []  # (chat_id, body) for every message sent
         self.beside = []  # (chat_id, app_id) for every open-beside request
 
@@ -191,6 +194,15 @@ class FakeFeed:
         if self.rename_failures:
             raise self.rename_failures.pop(0)
         return {"id": chat_id, "title": title}
+
+    def list_deleted_chats(self):
+        return [dict(row) for row in self.deleted]
+
+    def recover_chat(self, chat_id):
+        self.actions.append(("recover", chat_id))
+        if self.recover_failure is not None:
+            raise self.recover_failure
+        return {}
 
     def open_beside(self, chat_id, app_id):
         self.beside.append((chat_id, app_id))

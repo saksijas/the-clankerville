@@ -146,3 +146,20 @@ def test_rename_chat_patches_its_title(tmp_path):
     OwnerFeed(base_url="http://x", key_path=key(tmp_path, "k"), opener=rec).rename_chat("c1", "Fix login")
     assert rec.last.get_method() == "PATCH" and rec.last.full_url == "http://x/api/chats/c1"
     assert json.loads(rec.last.data) == {"title": "Fix login"}
+
+
+def test_list_deleted_chats_reads_chat_logs_and_keeps_only_deleted(tmp_path):  # former staff, Oct 8
+    rec = Recorder(json_body={"items": [{"id": "live", "deleted_at": None}, {"id": "gone", "deleted_at": "2026-10-08T02:24:17"}],
+                              "next_cursor": None})
+    rows = OwnerFeed(base_url="http://x", key_path=key(tmp_path, "k"), opener=rec).list_deleted_chats()
+    assert [row["id"] for row in rows] == ["gone"]
+    assert rec.last.full_url == "http://x/api/chat-logs?include_deleted=true&limit=100&cursor=0"
+
+
+def test_recover_chat_posts_without_a_body_and_410_means_too_late(tmp_path):
+    rec = Recorder(json_body={"id": "c1"})
+    OwnerFeed(base_url="http://x", key_path=key(tmp_path, "k"), opener=rec).recover_chat("c1")
+    assert rec.last.get_method() == "POST" and rec.last.full_url == "http://x/api/chats/c1/recover" and rec.last.data is None
+    with pytest.raises(FeedError) as e:
+        OwnerFeed(base_url="http://x", key_path=key(tmp_path, "k"), opener=http_error(410)).recover_chat("c1")
+    assert e.value.code == "too_late"

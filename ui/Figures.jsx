@@ -298,7 +298,8 @@ export function FireCorner({ P, origin, active, onPress }) {
 
 // The CR desk, Clanker Resources (spec 2026-10-08 §7.4): a reception desk in floor 1's lobby with a
 // sign and a stack of applicants' papers. Pressing it opens the hire form.
-export function CRDesk({ P, room, onPress, scale = 1 }) {
+export function CRDesk({ P, room, onPress, scale: textScale = 1 }) {
+  const scale = Math.min(textScale, 1.3) // grows for phones, but stays clear of the Former staff board beside it
   const { x, y } = crDeskSpot(room)
   const [sx, fy] = P(x + 0.65, y + 0.6, 0)
   const sy = fy + 9 // the sign sits under the desk, like a name tag, clear of the agents behind it
@@ -312,6 +313,47 @@ export function CRDesk({ P, room, onPress, scale = 1 }) {
       <rect x={sx - w / 2} y={sy - 7 * scale} width={w} height={14 * scale} rx={7 * scale} fill="#6d5dfc" stroke="#4b3fd1" strokeWidth=".8" />
       <text x={sx} y={sy + 2.4 * scale} fontSize={6.6 * scale} fontWeight="800" fill="#fff" textAnchor="middle">{label}</text>
       <text x={tx} y={ty + 5 * scale} fontSize={4.2 * scale} fontWeight="700" fill="#2a2340" stroke="#fff" strokeWidth={1.2 * scale} paintOrder="stroke" textAnchor="middle">Applicants</text>
+    </g>
+  )
+}
+
+// Former staff (owner's idea, 2026-10-08): a freestanding corkboard in floor 1's lobby, beside the CR
+// desk, with the deleted agents Möbius can still recover pinned up as little cards. In the lobby no
+// agent or speech bubble stands in front of it. Pressing it opens the rehire list.
+export const FORMER_BOARD = { x0: 7.0, x1: 9.8, y: 10.55 }
+export function FormerBoard({ P, staff, onPress, scale = 1 }) {
+  const { x0, x1, y } = FORMER_BOARD
+  const z0 = 9
+  const z1 = 42
+  const quad = (a, b, za, zb) => [P(a, y, za), P(b, y, za), P(b, y, zb), P(a, y, zb)].map(([px, py]) => `${px.toFixed(1)},${py.toFixed(1)}`).join(' ')
+  const [hx, hy] = P((x0 + x1) / 2, y, z1 - 7)
+  const leg = a => { const [lx0, ly0] = P(a, y, 0); const [lx1, ly1] = P(a, y, z0); return <line key={a} x1={lx0} y1={ly0} x2={lx1} y2={ly1} stroke="#6b4a33" strokeWidth="2" /> }
+  const pinned = staff.slice(0, 4)
+  const more = staff.length - pinned.length
+  return (
+    <g {...eggButton(`Former staff: ${staff.length} you can rehire`, onPress)}>
+      {leg(x0 + 0.3)}{leg(x1 - 0.3)}
+      <polygon points={quad(x0, x1, z0, z1)} fill="#8a6a52" />
+      <polygon points={quad(x0 + 0.08, x1 - 0.08, z0 + 2, z1 - 2)} fill="#d9b382" />
+      <text x={hx} y={hy + 2} fontSize={5.4 * Math.min(scale, 1.4)} fontWeight="800" fill="#5a3e2b" textAnchor="middle" transform={wallTextTransform('back', hx, hy)}>Former staff</text>
+      {pinned.map((person, i) => {
+        const v = x0 + 0.5 + i * 0.6
+        const [cx, cy] = P(v, y, z0 + 13)
+        const [px, py] = P(v, y, z0 + 20)
+        return (
+          <g key={person.id}>
+            <polygon points={quad(v - 0.27, v + 0.27, z0 + 4, z0 + 21)} fill="#fffdf7" />
+            <circle cx={cx} cy={cy + 1} r="3.4" fill={person.look.skin} />
+            <path d={`M ${cx - 3.4} ${cy + 0.5} A 3.4 3.4 0 0 1 ${cx + 3.4} ${cy + 0.5} Z`} fill={person.look.hair} />
+            <rect x={cx - 3.2} y={cy + 4.2} width="6.4" height="2.6" rx="1.2" fill={person.look.shirt} />
+            <circle cx={px} cy={py} r="1.3" fill="#e5484d" />
+          </g>
+        )
+      })}
+      {more > 0 && (() => {
+        const [mx, my] = P(x1 - 0.25, y, z0 + 9)
+        return <text x={mx} y={my} fontSize="5" fontWeight="800" fill="#5a3e2b" textAnchor="middle" transform={wallTextTransform('back', mx, my)}>+{more}</text>
+      })()}
     </g>
   )
 }

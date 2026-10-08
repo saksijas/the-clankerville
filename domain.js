@@ -667,3 +667,14 @@ export function arrowStop(start, here, key, room) {
 
 // A toast with a button (Open chat) stays up long enough to press it.
 export const toastMs = action => (action ? 15000 : 6500)
+
+// --- Former staff (owner's idea, 2026-10-08) -----------------------------------
+// Deleted chats Möbius can still recover: a board on floor 1, a list, and Rehire.
+
+export const daysLeftText = days => (days <= 1 ? 'Last day' : `${days} days left`)
+
+export function rehireToast(result, name) {
+  if (result?.ok) return `Rehired ${name}. They're back in your chats.`
+  if (result?.error?.code === 'too_late') return `Too late to rehire ${name}: their 7 days are over.`
+  return `Couldn't rehire ${name}: ${result?.error?.message || 'something went wrong.'}`
+}

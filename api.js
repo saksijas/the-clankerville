@@ -19,6 +19,8 @@ export function createApi(appId, token, fetchImpl = (...args) => fetch(...args))
     sword: (kind, id) => call('sword', { method: 'POST', body: JSON.stringify({ kind, id }) }),
     internet: on => call('internet', { method: 'POST', body: JSON.stringify({ on }) }),
     hire: (title, text, cid) => call('hire', { method: 'POST', body: JSON.stringify({ title, text, cid }) }),
+    former: () => call('former'),
+    rehire: chatId => call('rehire', { method: 'POST', body: JSON.stringify({ chat_id: chatId }) }),
     thread: chatId => call(`thread?chat_id=${encodeURIComponent(chatId)}`),
     reply: (chatId, text, cid) => call('reply', { method: 'POST', body: JSON.stringify({ chat_id: chatId, text, cid }) }),
     answer: (chatId, questionId, picks, text, cid) => call('answer', {

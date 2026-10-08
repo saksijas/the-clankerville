@@ -5,6 +5,7 @@ Pure functions only: no I/O, no clock reads. `service.py` hands in the rows
 """
 
 import hashlib
+import math
 import os
 import re
 from datetime import UTC, datetime, timedelta
@@ -400,3 +401,31 @@ def build_snapshot(chats, details, teams, pods, office_progress, now):
         "characters": characters,
         "teams": team_rows,
     }
+
+
+# --- Former staff (owner's idea, 2026-10-08) ---------------------------------
+# Chats deleted in the last 7 days that Möbius can still recover, shown on a board on floor 1.
+
+RECOVERY_WINDOW = timedelta(days=7)  # Möbius's soft-delete window (SOFT_DELETE_TTL)
+FORMER_MAX = 30
+
+
+def former_staff(rows, now):
+    """The recoverable deleted chats, soonest to expire first, with whole days left (7, 6, … 1)."""
+    staff = []
+    for row in rows:
+        deleted = parse_time(row.get("deleted_at"))
+        chat_id = row.get("id")
+        if deleted is None or not isinstance(chat_id, str) or not chat_id:
+            continue
+        left = deleted + RECOVERY_WINDOW - now
+        if left <= timedelta(0):
+            continue
+        staff.append({
+            "id": chat_id, "name": row.get("title") or "Untitled chat", "short": short_name(row.get("title")),
+            "look": look_for(chat_id), "deleted_at": deleted.isoformat(),
+            "days_left": math.ceil(left / timedelta(days=1)),
+            "expires_at": (deleted + RECOVERY_WINDOW).isoformat(),
+        })
+    staff.sort(key=lambda item: item["expires_at"])
+    return staff[:FORMER_MAX]

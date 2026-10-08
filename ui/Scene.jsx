@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { COFFEE_CAPACITY, COFFEE_POD, COMPACT_TEXT_SCALE, COOLER_EMPTY, WALL_HEIGHT, bubbleText, crDeskSpot, gossipFor, doorSpan, doorSpot, elevatorSpot, insideRoom, onFloor, toFloorPoint, plateBox, plateText, poseFor, project, roomFrame, plateTeamSize, signLayout, signText, spotFor, swordWarnings, textScaleFor, walkOffset, wallTextTransform } from '../domain.js'
-import { Badge, Bubbles, CRDesk, Chair, CoffeeCorner, Desk, Elevator, FireCorner, HelperChip, Person, PhoneCorner, Plant, Poof, Walker, Watercooler, floorQuad, headOf } from './Figures.jsx'
+import { Badge, Bubbles, CRDesk, Chair, CoffeeCorner, Desk, Elevator, FORMER_BOARD, FireCorner, FormerBoard, HelperChip, Person, PhoneCorner, Plant, Poof, Walker, Watercooler, floorQuad, headOf } from './Figures.jsx'
 
 /* The isometric office: walls, floor, team rugs, desks, characters, and the
    overlays (chips, badges, bubbles, name tags) drawn on top in screen space. */
@@ -39,7 +39,7 @@ function useRenderedWidth(ref) {
 
 export default function Scene({ snap, f, selectedId, onSelect, onPress, onRelease, swordOn, hold, departed = {},
   internetOff = false, internetArmed = false, onInternet, viewFloor = 1, floorDot = false, onElevator,
-  arrivals = NONE, ghosts = [], walker = null, onWalk, egg = null, onEgg, onHire }) {
+  arrivals = NONE, ghosts = [], walker = null, onWalk, egg = null, onEgg, onHire, former = [], onFormer }) {
   const { width, depth } = snap.room
   const frame = roomFrame(width, depth)
   const svgRef = useRef(null)
@@ -93,6 +93,10 @@ export default function Scene({ snap, f, selectedId, onSelect, onPress, onReleas
   if (viewFloor === 1 && onHire) {
     const cr = crDeskSpot(snap.room)
     things.push({ d: cr.x + cr.y + 0.9, el: <CRDesk key="cr" P={P} room={snap.room} onPress={onHire} scale={textScale} /> })
+  }
+  // Beside it, the Former staff board: deleted agents you can still rehire.
+  if (viewFloor === 1 && onFormer) {
+    things.push({ d: (FORMER_BOARD.x0 + FORMER_BOARD.x1) / 2 + FORMER_BOARD.y, el: <FormerBoard key="former" P={P} staff={former} onPress={onFormer} scale={textScale} /> })
   }
   const eggKind = (snap.floors || []).find(fl => fl.floor === viewFloor)?.egg || (viewFloor === 1 ? 'internet' : null)
   const cornerDepth = COFFEE_POD.x + COFFEE_POD.y + 3.5

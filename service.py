@@ -343,6 +343,53 @@ def _hire(request, feed, now):
     return {"ok": True, "chat_id": chat_id} if name_locked else {"ok": True, "chat_id": chat_id, "name_locked": False}
 
 
+# --- Former staff: deleted chats Möbius can still recover (owner's idea, Oct 8) -----
+
+FORMER_BUDGET_SECONDS = 10.0
+REHIRE_LOG_KEEP = timedelta(days=30)
+
+
+def _former_feed(feed):
+    return feed or OwnerFeed(deadline=time.monotonic() + FORMER_BUDGET_SECONDS, clock=time.monotonic)
+
+
+@route("GET", "former")
+def _former(request, feed, now):
+    now = now or datetime.now(UTC)
+    try:
+        rows = _former_feed(feed).list_deleted_chats()
+    except FeedError as exc:
+        return _failure(exc)
+    return {"ok": True, "items": office.former_staff(rows, now)}
+
+
+def record_rehire(chat_id, ok, now):
+    """Log each rehire (when, which chat, whether it worked), never any text; 30 days."""
+    kept = [entry for entry in store.read_json("rehire-log.json", [])
+            if (office.parse_time(entry.get("at")) or now) >= now - REHIRE_LOG_KEEP]
+    kept.append({"at": now.isoformat(), "chat_id": chat_id, "ok": ok})
+    store.write_json("rehire-log.json", kept)
+
+
+@route("POST", "rehire")
+def _rehire(request, feed, now):
+    chat_id = _body(request).get("chat_id")
+    if not _is_id(chat_id):
+        return _problem("bad_request", "Say who to rehire.")
+    now = now or datetime.now(UTC)
+    feed = _former_feed(feed)
+    try:
+        # Only someone on the board: a deleted chat Möbius can still recover.
+        if chat_id not in {row.get("id") for row in office.former_staff(feed.list_deleted_chats(), now)}:
+            return _problem("not_found", "That agent can't be rehired any more.")
+        feed.recover_chat(chat_id)
+    except FeedError as exc:
+        record_rehire(chat_id, False, now)
+        return _failure(exc)
+    record_rehire(chat_id, True, now)
+    return {"ok": True, "chat_id": chat_id}
+
+
 # --- Quick reply: read a chat, reply, answer its question, open it beside -------
 
 # Möbius ends a service request at 15 s; a read plus a send stay well inside it.

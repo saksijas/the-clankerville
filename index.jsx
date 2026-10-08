@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createApi } from './api.js'
-import { DEMO_SNAPSHOT } from './demo.js'
-import { INTERNET_ARM_MS, WALKER_SPEED, arrowStop, createHold, eggMoment, elevatorSpot, hireToast, floorBadges, floorLabel, floorMoves, keysFree, nearElevator, walkerAt, walkerTarget, createVisibilityGate, createVisiblePoller, departureDelays, holdMs, internetClick, internetToast, localDay, toastMs, nextPollDelay, officeView, openMode, progressNews, shouldAutoOpenRecap, swordToast, watchReducedMotion } from './domain.js'
+import { DEMO_FORMER, DEMO_SNAPSHOT } from './demo.js'
+import { INTERNET_ARM_MS, WALKER_SPEED, arrowStop, createHold, eggMoment, elevatorSpot, hireToast, rehireToast, floorBadges, floorLabel, floorMoves, keysFree, nearElevator, walkerAt, walkerTarget, createVisibilityGate, createVisiblePoller, departureDelays, holdMs, internetClick, internetToast, localDay, toastMs, nextPollDelay, officeView, openMode, progressNews, shouldAutoOpenRecap, swordToast, watchReducedMotion } from './domain.js'
 import { CSS } from './theme.js'
 import DetailCard from './ui/DetailCard.jsx'
 import FloorPicker from './ui/FloorPicker.jsx'
+import FormerStaff from './ui/FormerStaff.jsx'
 import HireForm from './ui/HireForm.jsx'
 import Recap from './ui/Recap.jsx'
 import Scene from './ui/Scene.jsx'
@@ -223,6 +224,23 @@ export default function App({ appId, token }) {
   const [hire, setHire] = useState(null) // { cid, busy } while the form is open
   const openHire = () => setHire({ cid: `hire-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, busy: false })
 
+  // Former staff (owner's idea, Oct 8): deleted chats Möbius can still recover, checked every minute.
+  const [former, setFormer] = useState({ items: [], loaded: false })
+  const [formerOpen, setFormerOpen] = useState(false)
+  const [rehiring, setRehiring] = useState(null)
+  const loadFormer = useCallback(async () => {
+    if (demo) { setFormer({ items: DEMO_FORMER, loaded: true }); return }
+    const body = await api.former()
+    if (body?.ok) setFormer({ items: body.items, loaded: true })
+  }, [api, demo])
+  useEffect(() => {
+    if (!onScreen) return undefined
+    loadFormer()
+    const t = setInterval(loadFormer, 60000)
+    return () => clearInterval(t)
+  }, [loadFormer, onScreen])
+  const openFormer = () => { setFormerOpen(true); loadFormer() }
+
   // Easter eggs on floors 2-4 (spec 2026-10-08 §7.3): when each floor's egg was last set off.
   const [eggAt, setEggAt] = useState({})
   const [eggNow, setEggNow] = useState(() => Date.now())
@@ -369,6 +387,7 @@ export default function App({ appId, token }) {
       setDeparted(current => ({ ...current, ...Object.fromEntries(Object.entries(delays).map(([key, delay]) => [key, { at, delay }])) }))
     }
     say(swordToast(character, result) + (office === DEMO_SNAPSHOT && result.ok ? ' (Demo: nothing real happened.)' : ''))
+    if (result.ok && kind === 'chat') loadFormer() // the struck chat is now on the Former staff board
     window.mobius?.signal?.('sword_swing', { kind, ok: Boolean(result.ok) })
   }
   const startHold = character => {
@@ -468,8 +487,17 @@ export default function App({ appId, token }) {
     refresh()
   }
   const selected = shown.characters.find(c => c.id === selectedId) || null
-  // Arrow keys belong to whatever is open: a card, the elevator, the recap or the hire form.
-  keysBusyRef.current = pickerOpen || recapShown || Boolean(hire) || Boolean(selected)
+  // Arrow keys belong to whatever is open: a card, the elevator, the recap, the hire form or the board.
+  keysBusyRef.current = pickerOpen || recapShown || Boolean(hire) || Boolean(selected) || formerOpen
+  const rehire = async person => {
+    if (demo) { say(`Rehired ${person.name}. (Demo: nobody was rehired.)`); return }
+    setRehiring(person.id)
+    const result = await api.rehire(person.id)
+    setRehiring(null)
+    say(rehireToast(result, person.name))
+    loadFormer()
+    refresh()
+  }
   const leadId = selected ? (selected.kind === 'helper' ? selected.lead_id : selected.id) : null
   const lead = shown.characters.find(c => c.id === leadId)
   const teamRow = shown.teams.find(t => t.lead_id === leadId)
@@ -498,7 +526,7 @@ export default function App({ appId, token }) {
           <button type="button" className="ao-btn" onClick={() => updatePrefs({ demo: false })}>Exit demo</button>
         </div>
       )}
-      <div className="ao-layout" inert={recapShown || pickerOpen || hire ? true : undefined}>
+      <div className="ao-layout" inert={recapShown || pickerOpen || hire || formerOpen ? true : undefined}>
         <section className="ao-main">
           <StatusStrip office={shown.office} counts={shown.counts} stale={stale && !demo} swordOn={swordOn} onSword={toggleSword}
             onRecap={!demo && progress?.recap ? () => setRecapOpen(true) : undefined}
@@ -511,7 +539,7 @@ export default function App({ appId, token }) {
               arrivals={moves.arrivals} ghosts={moves.ghosts}
               walker={walker ? walkerAt(walker, walkerNow) : null}
               onWalk={point => walkTo(point, nearElevator(point, room) ? 'lift' : null)}
-              egg={egg} onEgg={pressEgg} onHire={openHire} />
+              egg={egg} onEgg={pressEgg} onHire={openHire} former={former.items} onFormer={openFormer} />
             {egg?.kind === 'fire' && egg.active && <div className="ao-fire" role="status">{egg.text}</div>}
             {swordOn && swordHint && <div className="ao-hint">Hold on someone: a chat is deleted, a helper dismissed · Tap Sword or press Esc to put it away</div>}
             {internetBusy && <div className="ao-hint">{internet.off ? 'Turning the Internet back on…' : 'Turning the Internet off…'}</div>}
@@ -539,6 +567,7 @@ export default function App({ appId, token }) {
       </div>
       {recapShown && <Recap recap={progress.recap} chats={progress.chats} onClose={() => setRecapOpen(false)} />}
       {hire && <HireForm busy={hire.busy} onHire={submitHire} onClose={() => setHire(null)} />}
+      {formerOpen && <FormerStaff staff={former.items} loaded={former.loaded} busyId={rehiring} onRehire={rehire} onClose={() => setFormerOpen(false)} />}
       {pickerOpen && <FloorPicker floors={floorsList} current={viewFloor} badges={badges} onPick={goToFloor} onClose={closePicker} />}
     </div>
   )

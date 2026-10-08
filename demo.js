@@ -44,3 +44,10 @@ export const DEMO_SNAPSHOT = {
   ],
   teams: [{ lead_id: 'demo-lead', member_ids: ['demo-h1', 'demo-h2', 'demo-h3'] }],
 }
+
+// Former staff in the sample office: deleted agents that can still be rehired.
+export const DEMO_FORMER = [
+  { id: 'demo-old-landing', name: 'Old landing page', short: 'Old landing page', look: look('#d9a441', '#e85d75', '#f2c9a0'), days_left: 1 },
+  { id: 'demo-old-quiz', name: 'Pub quiz questions', short: 'Pub quiz', look: look('#1f1f28', '#2fb3a3', '#8d5a3b'), days_left: 4 },
+  { id: 'demo-old-poems', name: 'Birthday poems', short: 'Birthday poems', look: look('#7a3e2b', '#6d5dfc', '#e8b793'), days_left: 6 },
+]

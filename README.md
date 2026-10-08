@@ -30,6 +30,9 @@ Agent Office; the app id stays `agent-office`.)
   turning it off and on again?", and floor 4 has a fire ("0118 999 881 999 119 725… 3"). These are just for fun.
 - **The CR desk** (Clanker Resources), in floor 1's lobby. Tap the applicants' papers, give the new hire a name
   and a first message, and press Hire. A real chat starts, named as you typed.
+- **Former staff** (added 2026-10-08). A corkboard in floor 1's lobby, beside the CR desk, pins up the agents
+  you deleted that Möbius can still recover. Tap it for the list: each agent shows its days left (7, 6, 5 … "Last
+  day"), soonest first, and **Rehire** brings the chat back.
 - **Demo mode** shows a sample office when you have no chats yet.
 
 ## What it does with your access
@@ -39,12 +42,13 @@ key (`/data/service-token.txt`) on every call, so it can do anything you can. No
 covers seeing and steering agents yet, so the manifest's empty permissions list does not show this;
 review updates before installing them. It reads your chats and helpers to draw the office, and it
 stops, deletes or messages a chat only when you use the sword, a quick reply or the Internet box,
-and it starts a new chat only when you hire at the CR desk. It talks only to your own Möbius, never
-to another server. `feed.py` is the single module that reads the key and calls Möbius; it never logs
-it. The office keeps small state files in its own storage: desk places; progress (XP, levels, and
-chat titles for the recap; a deleted chat's title is forgotten once its 60 recap days are over);
-while the Internet is off, the stopped chats' ids and titles; and logs of sword swings, replies,
-Internet switches and hires, which never hold names or message text and are kept for 30 days.
+and it starts or brings back a chat only when you hire at the CR desk or rehire from the Former
+staff board. It talks only to your own Möbius, never to another server. `feed.py` is the single
+module that reads the key and calls Möbius; it never logs it. The office keeps small state files in
+its own storage: desk places; progress (XP, levels, and chat titles for the recap; a deleted chat's
+title is forgotten once its 60 recap days are over); while the Internet is off, the stopped chats'
+ids and titles; and logs of sword swings, replies, Internet switches, hires and rehires, which never
+hold names or message text and are kept for 30 days.
 
 ## Development
 

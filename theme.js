@@ -145,6 +145,13 @@ export const CSS = `
   .ao-primary { background: #6d5dfc; border-color: #6d5dfc; color: #fff; }
   .ao-primary:disabled { opacity: .5; cursor: not-allowed; }
   .ao-toast-btn { pointer-events: auto; margin-left: 10px; }
+  .ao-former-card { width: min(460px, 100%); display: flex; flex-direction: column; gap: 10px; box-shadow: 0 12px 40px rgba(0,0,0,.3); }
+  .ao-former-card h2, .ao-former-card p { margin: 0; }
+  .ao-former-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; max-height: 50vh; overflow: auto; }
+  .ao-former-list li { display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface-2, #242427); }
+  .ao-former-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+  .ao-daysleft { font-size: 12px; padding: 2px 8px; border-radius: 999px; background: rgba(255,255,255,.08); color: var(--muted); white-space: nowrap; }
+  .ao-lastday { background: rgba(255,92,92,.18); color: #ffb4b4; }
   .ao-recap-list { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; line-height: 1.45; }
   .ao-pulse { animation: ao-pulse 1.4s ease-in-out infinite; }
   @keyframes ao-pulse { 0%, 100% { opacity: 1 } 50% { opacity: .78 } }

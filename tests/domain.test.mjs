@@ -625,3 +625,20 @@ test('a toast with an action stays long enough to use it', () => {
   assert.equal(toastMs(null), 6500)
   assert.equal(toastMs({ label: 'Open chat' }), 15000)
 })
+
+// --- Former staff (owner's idea, Oct 8) ---------------------------------------------------------
+
+import { daysLeftText, rehireToast } from '../domain.js'
+
+test('the board counts down 7, 6, 5 days and then says it is the last day', () => {
+  assert.equal(daysLeftText(7), '7 days left')
+  assert.equal(daysLeftText(2), '2 days left')
+  assert.equal(daysLeftText(1), 'Last day')
+})
+
+test('rehiring says what happened', () => {
+  assert.equal(rehireToast({ ok: true }, 'Weather'), "Rehired Weather. They're back in your chats.")
+  assert.equal(rehireToast({ ok: false, error: { code: 'too_late', message: 'x' } }, 'Weather'), 'Too late to rehire Weather: their 7 days are over.')
+  assert.equal(rehireToast({ ok: false, error: { code: 'key_rejected', message: 'Möbius rejected the owner key.' } }, 'Weather'),
+    "Couldn't rehire Weather: Möbius rejected the owner key.")
+})
