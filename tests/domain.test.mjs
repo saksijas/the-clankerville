@@ -516,45 +516,6 @@ test('agents who changed floors walk in from, or out to, the elevator on the flo
   assert.deepEqual([...floorMoves({}, now, 1).arrivals], [])
 })
 
-// --- The walking man (spec 2026-10-08 §7.2) -----------------------------------------------------
-
-import { WALKER_SPEED, walkerAt, walkerTarget, nearElevator, toFloorPoint, keysFree } from '../domain.js'
-
-const ROOM = { width: 13, depth: 11, floors: 4 }
-
-test('the walking man walks straight at 2.5 tiles a second', () => {
-  assert.equal(WALKER_SPEED, 2.5)
-  const walk = { from: [1, 1], to: [6, 1], at: 1000 }
-  assert.deepEqual(walkerAt(walk, 1000), [1, 1])
-  assert.deepEqual(walkerAt(walk, 2000), [3.5, 1])
-  assert.deepEqual(walkerAt(walk, 9000), [6, 1])
-})
-
-test('arrow keys aim far in a screen direction, inside the room', () => {
-  assert.deepEqual(walkerTarget([3, 3], 'ArrowUp', ROOM), [0.45, 0.45])
-  assert.deepEqual(walkerTarget([3, 3], 'ArrowDown', ROOM), [12.55, 10.55])
-  assert.equal(walkerTarget([3, 3], 'a', ROOM), null)
-})
-
-test('the elevator opens when he walks within half a tile of it', () => {
-  assert.equal(nearElevator([0.6, 10.3], ROOM), true)
-  assert.equal(nearElevator([1.5, 10.45], ROOM), false)
-})
-
-test('a tap on the floor maps back to the tile under it', () => {
-  const frame = roomFrame(ROOM.width, ROOM.depth)
-  const [sx, sy] = project(4.25, 7.5, 0, frame)
-  const [x, y] = toFloorPoint(sx, sy, frame)
-  assert.ok(Math.abs(x - 4.25) < 1e-9 && Math.abs(y - 7.5) < 1e-9)
-})
-
-test('arrow keys move him only when nothing else needs the keys', () => {
-  assert.equal(keysFree({ dialogOpen: false, focusTag: 'BODY' }), true)
-  assert.equal(keysFree({ dialogOpen: true, focusTag: 'BODY' }), false)
-  assert.equal(keysFree({ dialogOpen: false, focusTag: 'INPUT' }), false)
-  assert.equal(keysFree({ dialogOpen: false, focusTag: 'TEXTAREA' }), false)
-})
-
 // --- Easter eggs on floors 2-4 (spec 2026-10-08 §7.3) -------------------------------------------
 
 import { eggMoment, gossipFor, GOSSIP, PHONE_LINES, FIRE_TEXT, COOLER_EMPTY } from '../domain.js'
@@ -605,14 +566,7 @@ test('hiring says what happened', () => {
 
 // --- Final review, Oct 8 ------------------------------------------------------------------------
 
-import { arrowStop, toastMs } from '../domain.js'
-
-test('a short arrow press still moves him one tile', () => {
-  const [x, y] = arrowStop([3, 3], [3.1, 3.1], 'ArrowDown', ROOM)
-  assert.ok(Math.abs(x - (3 + Math.SQRT1_2)) < 1e-9 && Math.abs(y - (3 + Math.SQRT1_2)) < 1e-9)
-  assert.deepEqual(arrowStop([3, 3], [5, 5], 'ArrowDown', ROOM), [5, 5]) // a long press stops where he is
-  assert.deepEqual(arrowStop([0.5, 0.5], [0.5, 0.5], 'ArrowUp', ROOM), [0.45, 0.45]) // still inside the room
-})
+import { toastMs } from '../domain.js'
 
 test('hiring explains a name Möbius may change, and a first message it did not confirm', () => {
   assert.equal(hireToast({ ok: true, chat_id: 'c1', name_locked: false }, 'Fix login'),

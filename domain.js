@@ -565,46 +565,6 @@ export function floorMoves(previousFloors, characters, viewFloor) {
   return { arrivals, departures }
 }
 
-// --- The walking man (spec 2026-10-08 §7.2) ----------------------------------
-// The owner's own character: tap the floor or hold an arrow key to walk; walking into the
-// elevator opens the floor list. His position lives on this screen only.
-
-export const WALKER_SPEED = 2.5 // tiles a second, as in Break Room
-
-export function walkerAt(walk, nowMs) {
-  const [fx, fy] = walk.from
-  const [tx, ty] = walk.to
-  const dist = Math.hypot(tx - fx, ty - fy)
-  const done = ((nowMs - walk.at) / 1000) * WALKER_SPEED
-  if (dist === 0 || done >= dist) return [tx, ty]
-  const share = Math.max(0, done) / dist
-  return [fx + (tx - fx) * share, fy + (ty - fy) * share]
-}
-
-const within = (v, lo, hi) => Math.min(hi, Math.max(lo, v))
-export const insideRoom = ([x, y], room) => [within(x, 0.45, room.width - 0.45), within(y, 0.45, room.depth - 0.45)]
-
-// Arrow keys walk in screen directions; holding one aims far, and letting go stops him.
-const SCREEN_DIRECTIONS = { ArrowUp: [-1, -1], ArrowDown: [1, 1], ArrowLeft: [-1, 1], ArrowRight: [1, -1] }
-export function walkerTarget([x, y], key, room) {
-  const dir = SCREEN_DIRECTIONS[key]
-  return dir ? insideRoom([x + dir[0] * 20, y + dir[1] * 20], room) : null
-}
-
-export function nearElevator([x, y], room) {
-  const lift = elevatorSpot(room)
-  return Math.hypot(x - lift.x, y - lift.y) <= 0.5
-}
-
-// The floor tile under a point of the scene (the inverse of `project` at z = 0).
-export function toFloorPoint(sx, sy, frame) {
-  const a = (sx - frame.ox) / TILE // x - y
-  const b = (2 * (sy - frame.oy)) / TILE // x + y
-  return [(a + b) / 2, (b - a) / 2]
-}
-
-export const keysFree = ({ dialogOpen, focusTag }) => !dialogOpen && !['INPUT', 'TEXTAREA', 'SELECT'].includes(focusTag)
-
 // --- Easter eggs on floors 2-4 (spec 2026-10-08 §7.3) -------------------------
 // Screen-only fun: tap the floor's corner object. None of them touches a real agent.
 
@@ -653,16 +613,6 @@ export function hireToast(result, name) {
   if (result?.created && result.error?.code === 'unconfirmed') return `${name} is hired, but Möbius didn't confirm their first message. Check the chat before sending it again.`
   if (result?.created) return `${name} is hired, but their first message didn't send. Open the chat to send it.`
   return `Couldn't hire ${name}: ${result?.error?.message || 'something went wrong.'}`
-}
-
-// A short arrow press still moves him a whole tile (spec 2026-10-08 §7.2): he stops at whichever is
-// further along, where he is now or one tile from where the press started.
-export function arrowStop(start, here, key, room) {
-  const dir = SCREEN_DIRECTIONS[key]
-  if (!dir) return here
-  if (Math.hypot(here[0] - start[0], here[1] - start[1]) >= 1) return here
-  const len = Math.hypot(dir[0], dir[1])
-  return insideRoom([start[0] + dir[0] / len, start[1] + dir[1] / len], room)
 }
 
 // A toast with a button (Open chat) stays up long enough to press it.

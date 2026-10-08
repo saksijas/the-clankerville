@@ -213,24 +213,6 @@ export function Elevator({ P, room, floor, dot, onPress }) {
   )
 }
 
-// The owner's walking man (spec 2026-10-08 §7.2): the IT-nerd look he liked, white shirt, red tie
-// and glasses. Drawn like everyone else, plus the tie and glasses.
-const YOU_LOOK = { hair: '#3b2a20', shirt: '#f4f1fb', skin: '#f0c39a' }
-export function Walker({ P, spot, f }) {
-  const [sx, sy] = P(spot.x, spot.y)
-  return (
-    <g pointerEvents="none">
-      <Person P={P} spot={spot} look={YOU_LOOK} pose={null} f={f} />
-      <polygon points={`${sx - 1.4},${sy - 29.5} ${sx + 1.4},${sy - 29.5} ${sx + 2.1},${sy - 19} ${sx},${sy - 16.5} ${sx - 2.1},${sy - 19}`} fill="#e5484d" />
-      <g fill="none" stroke="#1b1726" strokeWidth="1">
-        <circle cx={sx - 2.7} cy={sy - 36.5} r="2.3" />
-        <circle cx={sx + 2.7} cy={sy - 36.5} r="2.3" />
-        <line x1={sx - 0.4} y1={sy - 36.7} x2={sx + 0.4} y2={sy - 36.7} />
-      </g>
-    </g>
-  )
-}
-
 // Floors 2-4's corners (spec 2026-10-08 §7.3), where the floor's on-break agents hang out.
 // Each one is a hidden button, like floor 1's Internet box; none of them touches a real agent.
 function eggButton(label, onPress) {

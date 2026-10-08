@@ -23,9 +23,7 @@ Agent Office; the app id stays `agent-office`.)
   tell them yourself.
 - **Floors** (added 2026-10-08). The office is a 4-floor building with 8 desks a floor. Agents who need you or
   are working get floor 1; idle ones move up, and helpers sit with their lead. Agents of equal rank keep their
-  floor. The strip says which floor you're on, and a red dot marks a floor where someone needs you.
-- **You.** Your own character, in a white shirt with a red tie and glasses. Tap the floor or hold an arrow key to
-  walk. Walk into the elevator (or tap it) to pick a floor. Tapping an agent still opens its card.
+  floor. Tap the elevator (or the strip's floor button) to change floors; a red dot marks a floor where someone needs you.
 - **A surprise on every floor:** floor 2's watercooler sets off gossip, floor 3's phone asks "Have you tried
   turning it off and on again?", and floor 4 has a fire ("0118 999 881 999 119 725… 3"). These are just for fun.
 - **The CR desk** (Clanker Resources), in floor 1's lobby. Tap the applicants' papers, give the new hire a name

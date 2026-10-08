@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createApi } from './api.js'
 import { DEMO_FORMER, DEMO_SNAPSHOT } from './demo.js'
-import { INTERNET_ARM_MS, WALKER_SPEED, arrowStop, createHold, eggMoment, elevatorSpot, hireToast, rehireToast, floorBadges, floorLabel, floorMoves, keysFree, nearElevator, walkerAt, walkerTarget, createVisibilityGate, createVisiblePoller, departureDelays, holdMs, internetClick, internetToast, localDay, toastMs, nextPollDelay, officeView, openMode, progressNews, shouldAutoOpenRecap, swordToast, watchReducedMotion } from './domain.js'
+import { INTERNET_ARM_MS, createHold, eggMoment, hireToast, rehireToast, floorBadges, floorLabel, floorMoves, createVisibilityGate, createVisiblePoller, departureDelays, holdMs, internetClick, internetToast, localDay, toastMs, nextPollDelay, officeView, openMode, progressNews, shouldAutoOpenRecap, swordToast, watchReducedMotion } from './domain.js'
 import { CSS } from './theme.js'
 import DetailCard from './ui/DetailCard.jsx'
 import FloorPicker from './ui/FloorPicker.jsx'
@@ -208,16 +208,11 @@ export default function App({ appId, token }) {
     return () => clearTimeout(t)
   }, [shown, viewFloor, demo])
   const goToFloor = floor => {
-    if (floor === viewFloor) { closePicker(); return }
-    setViewFloor(floor)
     setPickerOpen(false)
+    if (floor === viewFloor) return
+    setViewFloor(floor)
     setSelectedId(null)
     setMoves({ arrivals: new Set(), ghosts: [] })
-  }
-  // Staying put steps him back out of the elevator, so he isn't stuck re-opening it.
-  const closePicker = () => {
-    setPickerOpen(false)
-    if (walkerRef.current && nearElevator(walkerAt(walkerRef.current, Date.now()), room)) stepOut()
   }
 
   // The CR desk (spec 2026-10-08 §7.4). One id per opened form, so a retried Hire reuses the same chat.
@@ -254,66 +249,6 @@ export default function App({ appId, token }) {
     }, 250)
     return () => clearInterval(tick)
   }, [eggAt, viewFloor])
-
-  // The walking man (spec 2026-10-08 §7.2): steps out of the elevator on each floor, walks where
-  // you tap or while you hold an arrow key, and opens the floor list when he walks into the elevator.
-  const room = shown?.room || { width: 13, depth: 11, floors: 4 }
-  const [walker, setWalker] = useState(null) // { from, to, at, aim }
-  const [walkerNow, setWalkerNow] = useState(() => Date.now())
-  const walkerRef = useRef(walker)
-  walkerRef.current = walker
-  const keysBusyRef = useRef(false)
-  const pressStartRef = useRef(null)
-  const walkTo = useCallback((to, aim = null) => {
-    const now = Date.now()
-    const current = walkerRef.current
-    setWalkerNow(now)
-    setWalker({ from: current ? walkerAt(current, now) : to, to, at: now, aim })
-  }, [])
-  const stepOut = useCallback(() => {
-    const lift = elevatorSpot(room)
-    const now = Date.now()
-    setWalkerNow(now)
-    setWalker({ from: [lift.x, lift.y], to: [lift.x + 1.2, lift.y - 0.4], at: now, aim: null })
-  }, [room.depth])
-  useEffect(() => { stepOut() }, [viewFloor, stepOut])
-  useEffect(() => {
-    if (!walker) return undefined
-    const arriveAt = walker.at + (Math.hypot(walker.to[0] - walker.from[0], walker.to[1] - walker.from[1]) / WALKER_SPEED) * 1000
-    const arrive = () => { if (walker.aim === 'lift') { setPickerOpen(true); setWalker(w => (w ? { ...w, aim: null } : w)) } }
-    if (Date.now() >= arriveAt) { arrive(); return undefined }
-    const tick = setInterval(() => {
-      const now = Date.now()
-      setWalkerNow(now)
-      if (now >= arriveAt) { clearInterval(tick); arrive() }
-    }, 60)
-    return () => clearInterval(tick)
-  }, [walker])
-  useEffect(() => {
-    const isArrow = key => key === 'ArrowUp' || key === 'ArrowDown' || key === 'ArrowLeft' || key === 'ArrowRight'
-    const free = () => keysFree({ dialogOpen: keysBusyRef.current, focusTag: document.activeElement?.tagName })
-    const down = event => {
-      if (!isArrow(event.key) || event.repeat || !free() || !walkerRef.current) return
-      const here = walkerAt(walkerRef.current, Date.now())
-      const target = walkerTarget(here, event.key, room)
-      if (!target) return
-      event.preventDefault()
-      pressStartRef.current = here
-      walkTo(target)
-    }
-    const up = event => {
-      if (!isArrow(event.key) || !free() || !walkerRef.current || !pressStartRef.current) return
-      const start = pressStartRef.current
-      pressStartRef.current = null
-      // He stops where he is, or a whole tile on for a short press; walking into the lift opens it,
-      // unless the press began there (stepping away from it shouldn't reopen it).
-      const stop = arrowStop(start, walkerAt(walkerRef.current, Date.now()), event.key, room)
-      walkTo(stop, !nearElevator(start, room) && nearElevator(stop, room) ? 'lift' : null)
-    }
-    window.addEventListener('keydown', down)
-    window.addEventListener('keyup', up)
-    return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up) }
-  }, [walkTo, room.width, room.depth])
 
   const say = (text, action = null) => {
     const id = Date.now()
@@ -487,8 +422,6 @@ export default function App({ appId, token }) {
     refresh()
   }
   const selected = shown.characters.find(c => c.id === selectedId) || null
-  // Arrow keys belong to whatever is open: a card, the elevator, the recap, the hire form or the board.
-  keysBusyRef.current = pickerOpen || recapShown || Boolean(hire) || Boolean(selected) || formerOpen
   const rehire = async person => {
     if (demo) { say(`Rehired ${person.name}. (Demo: nobody was rehired.)`); return }
     setRehiring(person.id)
@@ -537,8 +470,6 @@ export default function App({ appId, token }) {
               internetOff={internet.off} internetArmed={Boolean(internetArmed)} onInternet={pressInternet}
               viewFloor={viewFloor} floorDot={otherFloorNeedsYou} onElevator={() => setPickerOpen(true)}
               arrivals={moves.arrivals} ghosts={moves.ghosts}
-              walker={walker ? walkerAt(walker, walkerNow) : null}
-              onWalk={point => walkTo(point, nearElevator(point, room) ? 'lift' : null)}
               egg={egg} onEgg={pressEgg} onHire={openHire} former={former.items} onFormer={openFormer} />
             {egg?.kind === 'fire' && egg.active && <div className="ao-fire" role="status">{egg.text}</div>}
             {swordOn && swordHint && <div className="ao-hint">Hold on someone: a chat is deleted, a helper dismissed · Tap Sword or press Esc to put it away</div>}
@@ -568,7 +499,7 @@ export default function App({ appId, token }) {
       {recapShown && <Recap recap={progress.recap} chats={progress.chats} onClose={() => setRecapOpen(false)} />}
       {hire && <HireForm busy={hire.busy} onHire={submitHire} onClose={() => setHire(null)} />}
       {formerOpen && <FormerStaff staff={former.items} loaded={former.loaded} busyId={rehiring} onRehire={rehire} onClose={() => setFormerOpen(false)} />}
-      {pickerOpen && <FloorPicker floors={floorsList} current={viewFloor} badges={badges} onPick={goToFloor} onClose={closePicker} />}
+      {pickerOpen && <FloorPicker floors={floorsList} current={viewFloor} badges={badges} onPick={goToFloor} onClose={() => setPickerOpen(false)} />}
     </div>
   )
 }

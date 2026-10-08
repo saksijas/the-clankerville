@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { COFFEE_CAPACITY, COFFEE_POD, COMPACT_TEXT_SCALE, COOLER_EMPTY, WALL_HEIGHT, bubbleText, crDeskSpot, gossipFor, doorSpan, doorSpot, elevatorSpot, insideRoom, onFloor, toFloorPoint, plateBox, plateText, poseFor, project, roomFrame, plateTeamSize, signLayout, signText, spotFor, swordWarnings, textScaleFor, walkOffset, wallTextTransform } from '../domain.js'
-import { Badge, Bubbles, CRDesk, Chair, CoffeeCorner, Desk, Elevator, FORMER_BOARD, FireCorner, FormerBoard, HelperChip, Person, PhoneCorner, Plant, Poof, Walker, Watercooler, floorQuad, headOf } from './Figures.jsx'
+import { COFFEE_CAPACITY, COFFEE_POD, COMPACT_TEXT_SCALE, COOLER_EMPTY, WALL_HEIGHT, bubbleText, crDeskSpot, gossipFor, doorSpan, doorSpot, elevatorSpot, onFloor, plateBox, plateText, poseFor, project, roomFrame, plateTeamSize, signLayout, signText, spotFor, swordWarnings, textScaleFor, walkOffset, wallTextTransform } from '../domain.js'
+import { Badge, Bubbles, CRDesk, Chair, CoffeeCorner, Desk, Elevator, FORMER_BOARD, FireCorner, FormerBoard, HelperChip, Person, PhoneCorner, Plant, Poof, Watercooler, floorQuad, headOf } from './Figures.jsx'
 
 /* The isometric office: walls, floor, team rugs, desks, characters, and the
    overlays (chips, badges, bubbles, name tags) drawn on top in screen space. */
@@ -39,7 +39,7 @@ function useRenderedWidth(ref) {
 
 export default function Scene({ snap, f, selectedId, onSelect, onPress, onRelease, swordOn, hold, departed = {},
   internetOff = false, internetArmed = false, onInternet, viewFloor = 1, floorDot = false, onElevator,
-  arrivals = NONE, ghosts = [], walker = null, onWalk, egg = null, onEgg, onHire, former = [], onFormer }) {
+  arrivals = NONE, ghosts = [], egg = null, onEgg, onHire, former = [], onFormer }) {
   const { width, depth } = snap.room
   const frame = roomFrame(width, depth)
   const svgRef = useRef(null)
@@ -104,7 +104,6 @@ export default function Scene({ snap, f, selectedId, onSelect, onPress, onReleas
   if (eggKind === 'watercooler') things.push({ d: cornerDepth, el: <Watercooler key="egg" P={P} origin={COFFEE_POD} active={Boolean(egg?.active)} onPress={onEgg} /> })
   if (eggKind === 'phone') things.push({ d: cornerDepth, el: <PhoneCorner key="egg" P={P} origin={COFFEE_POD} ringing={Boolean(egg?.active && egg.ringing)} onPress={onEgg} /> })
   if (eggKind === 'fire') things.push({ d: cornerDepth, el: <FireCorner key="egg" P={P} origin={COFFEE_POD} active={Boolean(egg?.active)} onPress={onEgg} /> })
-  if (walker) things.push({ d: walker[0] + walker[1], el: <Walker key="you" P={P} spot={{ x: walker[0], y: walker[1] }} f={f} /> })
   things.push({ d: width - 0.6 + 0.3 + 0.3, el: <Plant key="plant-back" P={P} x={width - 0.7} y={0.2} /> })
   things.push({ d: width - 0.7 + depth - 0.7 + 0.3, el: <Plant key="plant-front" P={P} x={width - 0.7} y={depth - 0.7} /> })
   things.sort((a, b) => a.d - b.d)
@@ -153,17 +152,7 @@ export default function Scene({ snap, f, selectedId, onSelect, onPress, onReleas
   const sign = signLayout(signLabel, textScale, depth)
 
   return (
-    <svg ref={svgRef} viewBox={`0 0 ${frame.viewW} ${frame.viewH}`} className="ao-svg" role="group" aria-label="Office floor. Tap the floor to walk there."
-      onClick={event => {
-        // Tapping the floor walks you there (spec 2026-10-08 §7.2); taps on people and things stop before this.
-        const svg = svgRef.current
-        if (!onWalk || swordOn || !svg?.getScreenCTM) return
-        const point = svg.createSVGPoint()
-        point.x = event.clientX
-        point.y = event.clientY
-        const local = point.matrixTransform(svg.getScreenCTM().inverse())
-        onWalk(insideRoom(toFloorPoint(local.x, local.y, frame), snap.room))
-      }}>
+    <svg ref={svgRef} viewBox={`0 0 ${frame.viewW} ${frame.viewH}`} className="ao-svg" role="group" aria-label="Office floor">
       <polygon points={pts([P(0, 0), P(width, 0), P(width, 0, WALL_HEIGHT), P(0, 0, WALL_HEIGHT)])} fill="#d3cce8" />
       <polygon points={pts([P(0, 0), P(0, depth), P(0, depth, WALL_HEIGHT), P(0, 0, WALL_HEIGHT)])} fill="#c2bade" />
       {[[4.8, 6.6], [7.2, 9.0]].map(([a, b]) => <polygon key={a} points={pts([P(a, 0, 26), P(b, 0, 26), P(b, 0, 58), P(a, 0, 58)])} fill="#bfe6fa" stroke="#fff" strokeWidth="2" />)}
@@ -208,10 +197,6 @@ export default function Scene({ snap, f, selectedId, onSelect, onPress, onReleas
           const text = plateText(character, teamSize[character.id] || 0, compact)
           return <text key={`n-${character.id}`} x={sx} y={sy + 5 + 8 * textScale} fill="#2a2340" stroke="#fff" strokeWidth={2.4 * textScale} paintOrder="stroke" strokeLinejoin="round">{text}</text>
         })}
-        {walker && (() => {
-          const [sx, sy] = P(walker[0], walker[1])
-          return <text x={sx} y={sy + 5 + 8 * textScale} fill="#6d5dfc" stroke="#fff" strokeWidth={2.4 * textScale} paintOrder="stroke" strokeLinejoin="round">You</text>
-        })()}
       </g>
       {hold && (() => {
         const target = placed.find(p => p.character.id === hold.id)
@@ -226,7 +211,6 @@ export default function Scene({ snap, f, selectedId, onSelect, onPress, onReleas
           <rect
             key={`hit-${character.id}`} x={sx - 14} y={sy - 58} width="28" height="64" fill="rgba(0,0,0,0)"
             role="button" tabIndex={0} aria-label={label} className="ao-hit"
-            onClick={event => event.stopPropagation()}
             onPointerDown={event => { if (swordOn && onPress) { event.preventDefault(); onPress(character) } else onSelect(character.id) }}
             onPointerUp={() => onRelease?.()}
             onPointerLeave={() => onRelease?.()}
