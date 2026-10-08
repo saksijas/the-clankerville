@@ -1,0 +1,177 @@
+import React, { useEffect, useRef, useState } from 'react'
+import { COFFEE_CAPACITY, COFFEE_POD, COMPACT_TEXT_SCALE, WALL_HEIGHT, bubbleText, doorSpot, plateBox, plateText, poseFor, project, roomFrame, plateTeamSize, signLayout, signText, spotFor, swordWarnings, textScaleFor, walkOffset, wallTextTransform } from '../domain.js'
+import { Badge, Bubbles, Chair, CoffeeCorner, Desk, HelperChip, Person, Plant, Poof, floorQuad, headOf } from './Figures.jsx'
+
+/* The isometric office: walls, floor, team rugs, desks, characters, and the
+   overlays (chips, badges, bubbles, name tags) drawn on top in screen space. */
+
+const LEAD_SLOT = { x: 1.4, y: 0.2 } // office.py LEAD_SLOT: a lead's desk inside its pod
+const seatOf = desk => ({ x: desk.x + 0.6, y: desk.y + 1.05 })
+
+// A banner painted along a wall. Its band grows with the font, so a phone's bigger text still fits.
+function WallSign({ P, plane, from, to, text, fill, fontSize = 7.5 }) {
+  const Q = plane === 'left' ? (v, z) => P(0, v, z) : (v, z) => P(v, 0, z)
+  const mid = 47
+  const half = Math.max(7, fontSize * 0.95)
+  const [cx, cy] = Q((from + to) / 2, mid)
+  const pts = [Q(from, mid - half), Q(to, mid - half), Q(to, mid + half), Q(from, mid + half)].map(p => p.join(',')).join(' ')
+  return (
+    <g>
+      <polygon points={pts} fill={fill} />
+      <text x={cx} y={cy + fontSize * 0.35} fontSize={fontSize} fontWeight="700" fill="#fff" textAnchor="middle" transform={wallTextTransform(plane, cx, cy)}>{text}</text>
+    </g>
+  )
+}
+
+// The scene's on-screen width, so its text can stay readable when it shrinks.
+function useRenderedWidth(ref) {
+  const [renderedWidth, setRenderedWidth] = useState(0)
+  useEffect(() => {
+    const element = ref.current
+    if (!element || typeof ResizeObserver === 'undefined') return undefined
+    const observer = new ResizeObserver(entries => setRenderedWidth(entries[entries.length - 1].contentRect.width))
+    observer.observe(element)
+    return () => observer.disconnect()
+  }, [ref])
+  return renderedWidth
+}
+
+export default function Scene({ snap, f, selectedId, onSelect, onPress, onRelease, swordOn, hold, departed = {},
+  internetOff = false, internetArmed = false, onInternet }) {
+  const { width, depth } = snap.room
+  const frame = roomFrame(width, depth)
+  const svgRef = useRef(null)
+  const textScale = textScaleFor(useRenderedWidth(svgRef), frame.viewW)
+  const compact = textScale > COMPACT_TEXT_SCALE
+  const P = (x, y, z = 0) => project(x, y, z, frame)
+  const pts = list => list.map(([a, b]) => `${a.toFixed(1)},${b.toFixed(1)}`).join(' ')
+
+  const door = doorSpot(snap.room)
+  let breakQueue = 0
+  const placed = snap.characters.map(character => {
+    const breakIndex = character.kind === 'chat' && character.state === 'on_break' ? breakQueue++ : 0
+    const spot = spotFor(character, breakIndex)
+    const where = character.state === 'on_break' && breakIndex < COFFEE_CAPACITY ? 'coffee' : 'seat'
+    const pose = poseFor(character, where)
+    const away = character.kind === 'chat' && (character.state === 'needs_you' || where === 'coffee')
+    // Spec §5.4: a helper that finished walks out of the door carrying its green check.
+    const walk = character.kind === 'helper' && character.state === 'done' ? walkOffset(P, spot, door) : null
+    return { character, spot, pose, away, walk, head: headOf(P, spot, pose) }
+  })
+  // How a character moves: vanishing in its turn after the sword, or walking out.
+  const motionOf = ({ character, walk }) => {
+    const gone = departed[character.id]
+    if (gone) return { className: 'ao-leaving', style: { animationDelay: `${gone.delay || 0}ms` } }
+    if (walk) return { className: 'ao-walking', style: { '--dx': `${walk[0]}px`, '--dy': `${walk[1]}px` } }
+    return {}
+  }
+
+  const things = []
+  for (const p of placed) {
+    const { character, spot, pose, away } = p
+    const lead = character.kind === 'chat' && snap.teams.some(team => team.lead_id === character.id)
+    things.push({ d: character.desk.x + character.desk.y + 0.9, el: <Desk key={`d-${character.id}`} P={P} desk={character.desk} state={character.state} lead={lead} f={f} /> })
+    if (away) {
+      const seat = seatOf(character.desk)
+      things.push({ d: seat.x + seat.y - 0.01, el: <Chair key={`c-${character.id}`} P={P} seat={seat} /> })
+    }
+    things.push({ d: spot.x + spot.y, el: <Person key={`p-${character.id}`} P={P} spot={spot} look={character.look} pose={pose} f={f} {...motionOf(p)} /> })
+  }
+  things.push({ d: COFFEE_POD.x + COFFEE_POD.y + 3.5, el: <CoffeeCorner key="coffee" P={P} origin={COFFEE_POD} f={f} off={internetOff} armed={internetArmed} onPress={onInternet} /> })
+  things.push({ d: width - 0.6 + 0.3 + 0.3, el: <Plant key="plant-back" P={P} x={width - 0.7} y={0.2} /> })
+  things.push({ d: 0.4 + depth - 0.7 + 0.3, el: <Plant key="plant-door" P={P} x={0.3} y={depth - 0.7} /> })
+  things.sort((a, b) => a.d - b.d)
+
+  const floor = []
+  for (let i = 0; i < width; i++) for (let j = 0; j < depth; j++) {
+    floor.push(<polygon key={`f${i}-${j}`} points={floorQuad(P, i, j, 1, 1)} fill={(i + j) % 2 ? '#ece7f6' : '#e3ddf1'} />)
+  }
+  const byId = Object.fromEntries(snap.characters.map(c => [c.id, c]))
+  const teamSize = Object.fromEntries(snap.teams.map(team => [
+    team.lead_id, plateTeamSize(team.member_ids.map(id => byId[id]).filter(Boolean), byId[team.lead_id]?.overflow || 0),
+  ]))
+  const selected = placed.find(p => p.character.id === selectedId && !p.walk) // no ring at a desk someone walked away from
+  const bubbles = placed
+    .filter(p => !departed[p.character.id] && bubbleText(p.character))
+    .map(p => ({ id: p.character.id, state: p.character.state, text: bubbleText(p.character), ax: p.head[0], ay: p.head[1] }))
+  // What a bubble must not cover: every other character's head and upper body,
+  // plus a helper's status chip to the right of its head.
+  // A helper walking out of the door is on its way out: nothing to avoid or tap.
+  const present = p => !departed[p.character.id] && !p.walk
+  const figures = placed
+    .filter(present)
+    .map(({ character, head: [hx, hy] }) => ({ id: character.id, x0: hx - 12, x1: hx + (character.kind === 'helper' ? 27 : 10), y0: hy - 13, y1: hy + 16 }))
+  // Name tags too: a bubble never covers someone else's name.
+  const plates = placed
+    .filter(p => present(p) && plateText(p.character))
+    .map(({ character, spot }) => {
+      const [sx, sy] = P(spot.x, spot.y)
+      return plateBox(character.id, sx, sy, plateText(character, teamSize[character.id] || 0, compact), textScale)
+    })
+  const signLabel = signText(snap.office)
+  const sign = signLayout(signLabel, textScale, depth)
+
+  return (
+    <svg ref={svgRef} viewBox={`0 0 ${frame.viewW} ${frame.viewH}`} className="ao-svg" role="group" aria-label="Office floor">
+      <polygon points={pts([P(0, 0), P(width, 0), P(width, 0, WALL_HEIGHT), P(0, 0, WALL_HEIGHT)])} fill="#d3cce8" />
+      <polygon points={pts([P(0, 0), P(0, depth), P(0, depth, WALL_HEIGHT), P(0, 0, WALL_HEIGHT)])} fill="#c2bade" />
+      {[[4.8, 6.6], [7.2, 9.0]].map(([a, b]) => <polygon key={a} points={pts([P(a, 0, 26), P(b, 0, 26), P(b, 0, 58), P(a, 0, 58)])} fill="#bfe6fa" stroke="#fff" strokeWidth="2" />)}
+      <WallSign P={P} plane="left" from={sign.from} to={sign.to} text={signLabel} fill="#8f86b0" fontSize={sign.fontSize} />
+      <polygon points={pts([P(0, depth - 2.2), P(0, depth - 0.9), P(0, depth - 0.9, 46), P(0, depth - 2.2, 46)])} fill="#8a6a52" />
+      <circle cx={P(0, depth - 2.0, 22)[0]} cy={P(0, depth - 2.0, 22)[1]} r="1.8" fill="#e0b04b" />
+      {floor}
+      {snap.teams.map(team => {
+        const lead = byId[team.lead_id]
+        const origin = { x: lead.desk.x - LEAD_SLOT.x, y: lead.desk.y - LEAD_SLOT.y }
+        return <polygon key={`rug-${team.lead_id}`} points={floorQuad(P, origin.x - 0.1, origin.y - 0.1, 4, 3)} fill="#b9aaf2" opacity=".55" />
+      })}
+      {selected && (() => {
+        const [sx, sy] = P(selected.spot.x, selected.spot.y)
+        const danger = swordOn
+        return (
+          <g>
+            <ellipse cx={sx} cy={sy} rx="18" ry="9" fill={danger ? 'rgba(229,72,77,.18)' : 'rgba(255,255,255,.55)'} stroke="#fff" strokeWidth="5" />
+            <ellipse cx={sx} cy={sy} rx="18" ry="9" fill="none" stroke={danger ? '#e5484d' : '#6d5dfc'} strokeWidth="2.6" />
+          </g>
+        )
+      })()}
+      {things.map(t => t.el)}
+      {placed.filter(p => !departed[p.character.id] && p.character.kind === 'helper').map(p => (
+        <g key={`chip-${p.character.id}`} {...motionOf(p)}><HelperChip head={p.head} state={p.character.state} f={f} /></g>
+      ))}
+      {placed.filter(p => departed[p.character.id]).map(p => {
+        const [sx, sy] = P(p.spot.x, p.spot.y)
+        return <Poof key={`poof-${p.character.id}`} x={sx} y={sy - 22} delay={departed[p.character.id].delay || 0} />
+      })}
+      {placed.filter(p => !departed[p.character.id] && p.character.kind === 'chat' && (p.character.state === 'needs_you' || p.character.state === 'error')).map(p => <Badge key={`badge-${p.character.id}`} head={p.head} state={p.character.state} scale={textScale} />)}
+      <Bubbles items={bubbles} width={frame.viewW} obstacles={[...figures, ...plates]} scale={textScale} />
+      <g fontSize={7.5 * textScale} fontWeight="600" textAnchor="middle">
+        {placed.filter(p => !departed[p.character.id] && plateText(p.character)).map(({ character, spot }) => {
+          const [sx, sy] = P(spot.x, spot.y)
+          const text = plateText(character, teamSize[character.id] || 0, compact)
+          return <text key={`n-${character.id}`} x={sx} y={sy + 5 + 8 * textScale} fill="#2a2340" stroke="#fff" strokeWidth={2.4 * textScale} paintOrder="stroke" strokeLinejoin="round">{text}</text>
+        })}
+      </g>
+      {hold && (() => {
+        const target = placed.find(p => p.character.id === hold.id)
+        if (!target) return null
+        const [sx, sy] = P(target.spot.x, target.spot.y)
+        return <ellipse key={`hold-${hold.key}`} cx={sx} cy={sy} rx="21" ry="10.5" pathLength="100" style={{ '--ao-hold': `${hold.ms}ms` }} className={`ao-ring${swordWarnings(target.character).length ? ' ao-ring-warn' : ''}`} />
+      })()}
+      {placed.filter(present).map(({ character, spot }) => {
+        const [sx, sy] = P(spot.x, spot.y)
+        const label = `${character.kind === 'helper' ? character.name : character.short}: ${character.state.replace('_', ' ')}`
+        return (
+          <rect
+            key={`hit-${character.id}`} x={sx - 14} y={sy - 58} width="28" height="64" fill="rgba(0,0,0,0)"
+            role="button" tabIndex={0} aria-label={label} className="ao-hit"
+            onPointerDown={event => { if (swordOn && onPress) { event.preventDefault(); onPress(character) } else onSelect(character.id) }}
+            onPointerUp={() => onRelease?.()}
+            onPointerLeave={() => onRelease?.()}
+            onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onSelect(character.id) } }}
+          />
+        )
+      })}
+    </svg>
+  )
+}
