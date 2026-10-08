@@ -21,7 +21,7 @@ export default function HireForm({ busy, onHire, onClose }) {
     <div className="ao-recap" role="dialog" aria-modal="true" aria-labelledby="ao-hire-title" onKeyDown={onKeyDown} onClick={close}>
       <form className="ao-card ao-hire-card" onClick={event => event.stopPropagation()}
         onSubmit={event => { event.preventDefault(); if (!problem && !busy) onHire(name.trim(), text.trim()) }}>
-        <h2 id="ao-hire-title">Clanker Resources</h2>
+        <h2 id="ao-hire-title">CR · Clanker Resources</h2>
         <p className="ao-muted">Hire a new clanker: give them a name and what to start on.</p>
         <label className="ao-hire-field">Name
           <input ref={nameRef} value={name} maxLength={HIRE_TITLE_MAX} onChange={event => setName(event.target.value)} placeholder="Fix the login page" />

@@ -297,21 +297,18 @@ export function FireCorner({ P, origin, active, onPress }) {
 }
 
 // The CR desk, Clanker Resources (spec 2026-10-08 §7.4): a reception desk in floor 1's lobby with a
-// sign and a stack of applicants' papers. Pressing it opens the hire form.
+// stack of applicants' papers and a quiet "Hire" label. Pressing it opens the hire form.
 export function CRDesk({ P, room, onPress, scale: textScale = 1 }) {
   const scale = Math.min(textScale, 1.3) // grows for phones, but stays clear of the Former staff board beside it
   const { x, y } = crDeskSpot(room)
   const [sx, fy] = P(x + 0.65, y + 0.6, 0)
-  const sy = fy + 9 // the sign sits under the desk, like a name tag, clear of the agents behind it
   const [tx, ty] = P(x + 0.95, y + 0.55, 15)
-  const label = 'CR · Clanker Resources'
-  const w = (label.length * 4.1 + 12) * scale
+  // Just a quiet "Hire" under the desk; the form it opens is titled CR · Clanker Resources.
   return (
-    <g {...eggButton('Clanker Resources: hire a new clanker', onPress)}>
+    <g {...eggButton('Hire a new clanker (CR · Clanker Resources)', onPress)}>
       {isoBox(P, x, y, 1.3, 0.6, 14, 0, ['#d6b48a', '#b8915f', '#a07a4c'])}
       {[0, 1, 2].map(i => <g key={i}>{isoBox(P, x + 0.7, y + 0.2, 0.42, 0.3, 1, 14 + i * 1.3, ['#fffdf7', '#e9e4d8', '#ddd6c6'])}</g>)}
-      <rect x={sx - w / 2} y={sy - 7 * scale} width={w} height={14 * scale} rx={7 * scale} fill="#6d5dfc" stroke="#4b3fd1" strokeWidth=".8" />
-      <text x={sx} y={sy + 2.4 * scale} fontSize={6.6 * scale} fontWeight="800" fill="#fff" textAnchor="middle">{label}</text>
+      <text x={sx} y={fy + 8 * textScale} fontSize={7.5 * textScale} fontWeight="700" fill="#6d5dfc" stroke="#fff" strokeWidth={2.4 * textScale} paintOrder="stroke" strokeLinejoin="round" textAnchor="middle">Hire</text>
       <text x={tx} y={ty + 5 * scale} fontSize={4.2 * scale} fontWeight="700" fill="#2a2340" stroke="#fff" strokeWidth={1.2 * scale} paintOrder="stroke" textAnchor="middle">Applicants</text>
     </g>
   )
