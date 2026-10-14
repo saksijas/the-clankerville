@@ -83,6 +83,10 @@ class OwnerFeed:
     def chat_detail(self, chat_id):
         return self._call("GET", f"/api/chats/{quote(chat_id, safe='')}?limit=1")
 
+    def chat_usage(self, chat_id):
+        """Every turn's dollar and token record for one chat (see spend.py for how to read it)."""
+        return self._call("GET", f"/api/chats/{quote(chat_id, safe='')}/usage")
+
     def list_delegations(self, limit=200):
         return self._call("GET", f"/api/delegations?limit={int(limit)}").get("items", [])
 

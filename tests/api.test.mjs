@@ -21,6 +21,12 @@ test('snapshot calls its own service with the app token', async () => {
   assert.equal(calls[0].init.headers.Authorization, 'Bearer app-tok')
 })
 
+test("the snapshot carries the owner's time zone for today's spend", async () => {
+  const { calls, fetchImpl } = recordingFetch({ body: { ok: true, characters: [] } })
+  await createApi(11, 't', fetchImpl).snapshot('America/New_York')
+  assert.equal(calls[0].url, '/api/apps/11/service/snapshot?tz=America%2FNew_York')
+})
+
 test('progress passes the working count; the sword posts kind and id', async () => {
   const { calls, fetchImpl } = recordingFetch({ body: { ok: true } })
   const api = createApi(11, 't', fetchImpl)

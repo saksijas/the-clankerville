@@ -340,15 +340,15 @@ def _latest_blocks(detail):
 COUNT_KEYS = ("working", "needs_you", "error", "watching", "on_break")
 
 
-def build_snapshot(chats, details, teams, pods, office_progress, now):
+def build_snapshot(chats, details, teams, pods, chat_spend, now):
     """Assemble the office snapshot from already-selected chats and fetched rows.
 
     `details` holds chat details for `working` chats only; a working chat
     without one (vanished, or skipped under the time budget) shows "Working".
     `teams` comes from `build_teams`; `pods` from `assign_floors` plus
     `assign_helper_desks`, so every desk here is the persisted one.
+    `chat_spend` maps a chat to its `spend.chat_view` (None until first read).
     """
-    chat_progress = office_progress.get("chats", {})
     counts = dict.fromkeys(COUNT_KEYS, 0)
     floor_counts = {floor: dict.fromkeys(COUNT_KEYS, 0) for floor in range(1, FLOORS + 1)}
     characters, team_rows = [], []
@@ -359,11 +359,10 @@ def build_snapshot(chats, details, teams, pods, office_progress, now):
         counts[state] += 1
         floor_counts[floor][state] += 1
         origin = pod_origin(pods[chat_id]["slot"])
-        progress = chat_progress.get(chat_id, {})
         character = {
             "id": chat_id, "kind": "chat", "chat_id": chat_id,
             "name": chat.get("title") or "Untitled chat", "short": short_name(chat.get("title")),
-            "state": state, "level": progress.get("level", 1), "xp_progress": progress.get("xp_progress", 0.0),
+            "state": state, "spend": chat_spend.get(chat_id),
             "queued": 0, "desk": _desk(origin, LEAD_SLOT), "floor": floor, "look": look_for(chat_id),
             "dismissable": True,
             # What a strike would also cancel, whatever state is on show: an
@@ -394,7 +393,6 @@ def build_snapshot(chats, details, teams, pods, office_progress, now):
     return {
         "ok": True,
         "generated_at": now.isoformat(),
-        "office": {key: office_progress[key] for key in ("level", "xp", "level_start_xp", "next_level_xp")},
         "counts": counts,
         "room": {"width": ROOM_WIDTH, "depth": ROOM_DEPTH, "floors": FLOORS},
         "floors": [{"floor": floor, "egg": EGGS[floor], "counts": floor_counts[floor]} for floor in range(1, FLOORS + 1)],

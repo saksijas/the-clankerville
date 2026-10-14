@@ -1,10 +1,15 @@
-"""Levels and the day's counters, derived only from finished work.
+"""The day's counters, achievements and the daily recap, from finished work only.
 
-XP comes from outcomes Möbius records durably: completed turns, helpers that
-came back done, apps a chat shipped. Busyness never counts. Every award has a
-stable key stored beside the XP it granted (`progress.json`), so re-reading the
-same history (a lost cursor, a retry, two open tabs) can never count twice.
-Cursors and the seen-apps map (`ledger.json`) are only a reading optimization.
+Counted outcomes are the ones Möbius records durably: completed turns, helpers
+that came back (done, failed or stopped), apps a chat shipped. Busyness never
+counts. Every outcome has a stable key stored with the day it counted for
+(`progress.json`), so re-reading the same history (a lost cursor, a retry, two
+open tabs) can never count twice. Cursors and the seen-apps map (`ledger.json`)
+are only a reading optimization.
+
+XP and levels were removed on 2026-10-13 (the owner: they "mean nothing to
+us"); what each chat costs (spend.py) took their place. An office saved before
+then drops its XP, levels and chat titles on the next check.
 """
 
 import re
@@ -16,25 +21,9 @@ import store
 from feed import FeedError
 from office import parse_time
 
-XP_TURN = 10
-XP_HELPER = 5
-XP_NEW_APP = 25
-XP_APP_UPDATE = 5
 BACKFILL = timedelta(days=7)
 KEEP_KEYS = timedelta(days=30)
 KEEP_DAYS = timedelta(days=60)
-
-_COUNTER = {"turn": "turns", "helper": "helpers_done", "new_app": "apps", "app_update": "apps"}
-
-
-def level_for(xp):
-    """(level, xp into this level, xp this level needs); level n → n+1 costs 50 × n."""
-    level, floor = 1, 0
-    while xp >= floor + 50 * level:
-        floor += 50 * level
-        level += 1
-    return level, xp - floor, 50 * level
-
 
 def owner_zone(name):
     """The owner's IANA time zone (sent by the office), or None when unknown."""
@@ -52,63 +41,31 @@ def local_day(moment, tz=None):
 
 
 def empty_day():
-    return {"turns": 0, "helpers_done": 0, "helpers_failed": 0, "helpers_stopped": 0, "apps": 0, "level_ups": []}
+    return {"turns": 0, "helpers_done": 0, "helpers_failed": 0, "helpers_stopped": 0, "apps": 0}
 
 
 def new_state():
-    return {"version": 1, "office": {"xp": 0}, "chats": {}, "achievements": [], "days": {}, "awarded": {}}
+    return {"version": 2, "achievements": [], "days": {}, "counted": {}}
 
 
 def load_state(saved=None):
+    saved = store.read_json("progress.json", {}) if saved is None else saved
     state = new_state()
-    state.update(store.read_json("progress.json", {}) if saved is None else saved)
+    state["achievements"] = list(saved.get("achievements") or [])
+    state["days"] = dict(saved.get("days") or {})
+    # Offices saved before 2026-10-13 kept these keys as "awarded" (with XP); they still stop a recount.
+    state["counted"] = dict(saved.get("counted") or saved.get("awarded") or {})
     return state
 
 
-def award(state, key, chat_id, xp, day, kind):
-    """Grant `xp` to a chat once per `key`; returns False when already granted."""
-    if key in state["awarded"]:
+def count(state, key, day, field):
+    """Count one outcome for `day` once per `key`; returns False when it was already counted."""
+    if key in state["counted"]:
         return False
-    state["awarded"][key] = day
-    chat = state["chats"].setdefault(chat_id, {"xp": 0, "title": None, "day_xp": {}})
-    before = level_for(chat["xp"])[0]
-    chat["xp"] += xp
-    chat["day_xp"][day] = chat["day_xp"].get(day, 0) + xp
-    state["office"]["xp"] += xp
-    counters = state["days"].setdefault(day, empty_day())
-    counters[_COUNTER[kind]] += 1
-    after = level_for(chat["xp"])[0]
-    if after > before:
-        counters["level_ups"].append({"chat_id": chat_id, "level": after})
-    return True
-
-
-def note(state, key, day, field):
-    """Count an outcome that earns no XP (a helper that failed or was stopped), once per `key`."""
-    if key in state["awarded"]:
-        return False
-    state["awarded"][key] = day
+    state["counted"][key] = day
     counters = state["days"].setdefault(day, empty_day())
     counters[field] = counters.get(field, 0) + 1  # days saved before a counter existed lack it
     return True
-
-
-def summary(state):
-    office_xp = state["office"]["xp"]
-    level, into, need = level_for(office_xp)
-    chats = {}
-    for chat_id, chat in state["chats"].items():
-        chat_level, chat_into, chat_need = level_for(chat["xp"])
-        chats[chat_id] = {"xp": chat["xp"], "level": chat_level,
-                          "xp_progress": round(chat_into / chat_need, 3), "title": chat.get("title")}
-    start = office_xp - into
-    return {"office": {"level": level, "xp": office_xp, "level_start_xp": start, "next_level_xp": start + need}, "chats": chats}
-
-
-def office_view(saved):
-    """Read-only progress for the snapshot: office level plus each chat's level."""
-    view = summary(load_state(saved))
-    return {**view["office"], "chats": view["chats"]}
 
 
 def _root_chat(chat_id, parent_of):
@@ -122,10 +79,8 @@ def _root_chat(chat_id, parent_of):
 def _prune(state, now, tz=None):
     oldest_key = local_day(now - KEEP_KEYS, tz)
     oldest_day = local_day(now - KEEP_DAYS, tz)
-    state["awarded"] = {key: day for key, day in state["awarded"].items() if day >= oldest_key}
+    state["counted"] = {key: day for key, day in state["counted"].items() if day >= oldest_key}
     state["days"] = {day: c for day, c in state["days"].items() if day >= oldest_day}
-    for chat in state["chats"].values():
-        chat["day_xp"] = {day: xp for day, xp in chat.get("day_xp", {}).items() if day >= oldest_day}
 
 
 ACHIEVEMENTS = ("first_team", "shipped_it", "full_house", "clean_sweep", "on_a_roll")
@@ -175,7 +130,7 @@ def check_achievements(state, *, delegations, working_now, now):
     """Unlock any achievement whose rule now holds; each unlocks exactly once."""
     rules = {
         "first_team": lambda: _helpers_overlapped(delegations, now),
-        "shipped_it": lambda: any(_NEW_APP_KEY.match(key) for key in state["awarded"]),
+        "shipped_it": lambda: any(_NEW_APP_KEY.match(key) for key in state["counted"]),
         "full_house": lambda: working_now >= FULL_HOUSE,
         "clean_sweep": lambda: _clean_sweep(delegations),
         "on_a_roll": lambda: _longest_streak(state) >= ROLL_DAYS,
@@ -186,34 +141,30 @@ def check_achievements(state, *, delegations, working_now, now):
     return newly
 
 
-def recap_for(state, day, tz=None):
-    """One day's summary for the daily recap, or None when nothing happened that day."""
+def recap_for(state, day, tz=None, spend=None):
+    """One day's summary for the daily recap, or None when nothing happened that day.
+
+    `spend` is that day's `spend.day_summary` (dollars, tokens, biggest spender), or None.
+    """
     counters = state["days"].get(day) or {}
     achievements = [entry["id"] for entry in state["achievements"]
                     if parse_time(entry.get("at")) and local_day(parse_time(entry["at"]), tz) == day]
-    if not achievements and not any(counters.get(key) for key in (
-            "turns", "helpers_done", "helpers_failed", "helpers_stopped", "apps", "level_ups")):
+    if not achievements and not spend and not any(counters.get(key) for key in (
+            "turns", "helpers_done", "helpers_failed", "helpers_stopped", "apps")):
         return None
-    busiest_id = max((chat_id for chat_id, chat in state["chats"].items() if chat.get("day_xp", {}).get(day)),
-                     key=lambda chat_id: state["chats"][chat_id]["day_xp"][day], default=None)
-    busiest = None
-    if busiest_id is not None:
-        chat = state["chats"][busiest_id]
-        busiest = {"chat_id": busiest_id, "title": chat.get("title"), "xp": chat["day_xp"][day]}
     return {
         "turns": counters.get("turns", 0), "helpers_done": counters.get("helpers_done", 0),
         "helpers_failed": counters.get("helpers_failed", 0), "helpers_stopped": counters.get("helpers_stopped", 0),
-        "apps": counters.get("apps", 0),
-        "level_ups": list(counters.get("level_ups", [])), "achievements": achievements, "busiest": busiest,
+        "apps": counters.get("apps", 0), "achievements": achievements, "spend": spend,
     }
 
 
-def catch_up(feed, now, working_now=0, tz=None, history_seconds=None, clock=time.monotonic):
-    """Read new history, award outcomes once, save, and return the summary.
+def catch_up(feed, now, working_now=0, tz=None, history_seconds=None, clock=time.monotonic, day_spend=None):
+    """Read new history, count outcomes once, save, and return achievements and yesterday's recap.
 
     Only history from 7 days before the office first ran (and never older than
-    the 30 days award keys are kept) counts, so losing a cursor cannot turn old
-    history into a sudden XP jump.
+    the 30 days count keys are kept) counts, so losing a cursor cannot turn old
+    history into a sudden jump. `day_spend(day)` gives a day's spend for the recap.
 
     History is read page by page until it is exhausted, a page fails to move
     forward, or `history_seconds` of reading have passed (counted from the first
@@ -245,7 +196,7 @@ def catch_up(feed, now, working_now=0, tz=None, history_seconds=None, clock=time
         for entry in page.get("runs") or []:
             when = parse_time(entry.get("ended_at")) or parse_time(entry.get("started_at")) or now
             if entry.get("status") == "completed" and when >= counts_from and entry.get("chat_id") not in app_chats:
-                award(state, f"run:{entry['id']}", entry["chat_id"], XP_TURN, local_day(when, tz), "turn")
+                count(state, f"run:{entry['id']}", local_day(when, tz), "turns")
         for event in page.get("events") or []:
             if event.get("type") != "agent_terminal":
                 continue
@@ -254,12 +205,9 @@ def catch_up(feed, now, working_now=0, tz=None, history_seconds=None, clock=time
             if when < counts_from or not chat_id or chat_id in app_chats:
                 continue
             key = f"helper:{event.get('agent_id')}:{event.get('agent_run_id')}"
-            if event.get("state") == "done":
-                award(state, key, chat_id, XP_HELPER, local_day(when, tz), "helper")
-            elif event.get("state") == "failed":
-                note(state, key, local_day(when, tz), "helpers_failed")
-            elif event.get("state") == "stopped":
-                note(state, key, local_day(when, tz), "helpers_stopped")
+            field = {"done": "helpers_done", "failed": "helpers_failed", "stopped": "helpers_stopped"}.get(event.get("state"))
+            if field:
+                count(state, key, local_day(when, tz), field)
         cursors["after_id"] = page.get("next_after_id", cursors["after_id"])
         cursors["runs_after_id"] = page.get("next_runs_after_id", cursors["runs_after_id"])
         more = page.get("has_more") or page.get("runs_has_more")
@@ -276,24 +224,17 @@ def catch_up(feed, now, working_now=0, tz=None, history_seconds=None, clock=time
         if not chat_id or chat_id in app_chats:
             continue
         if seen is None and created and created >= counts_from:
-            award(state, f"app:{app_id}:created", chat_id, XP_NEW_APP, local_day(created, tz), "new_app")
+            count(state, f"app:{app_id}:created", local_day(created, tz), "apps")
         elif updated and updated >= counts_from and (seen is None or updated > seen):
-            award(state, f"app:{app_id}:{local_day(updated, tz)}", chat_id, XP_APP_UPDATE, local_day(updated, tz), "app_update")
+            count(state, f"app:{app_id}:{local_day(updated, tz)}", local_day(updated, tz), "apps")
 
-    for chat in chats:
-        if chat["id"] in state["chats"] and chat.get("title"):
-            state["chats"][chat["id"]]["title"] = chat["title"]
     check_achievements(state, delegations=delegations, working_now=working_now, now=now)
     ledger.setdefault("initialized_at", now.isoformat())
     _prune(state, now, tz)
-    # A chat that's gone keeps its XP but not its title once its recap days are over.
-    present = {chat["id"] for chat in chats}
-    for chat_id, kept in state["chats"].items():
-        if chat_id not in present and not kept.get("day_xp"):
-            kept["title"] = None
-    # Progress (with its award keys) first: if the ledger write then fails, the
+    # Progress (with its count keys) first: if the ledger write then fails, the
     # next run re-reads the same history and the keys stop any double count.
     store.write_json("progress.json", state)
     store.write_json("ledger.json", ledger)
-    return {**summary(state), "achievements": list(state["achievements"]),
-            "recap": recap_for(state, local_day(now - timedelta(days=1), tz), tz)}
+    yesterday = local_day(now - timedelta(days=1), tz)
+    return {"achievements": list(state["achievements"]),
+            "recap": recap_for(state, yesterday, tz, spend=day_spend(yesterday) if day_spend else None)}

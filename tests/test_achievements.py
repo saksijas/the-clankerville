@@ -34,13 +34,12 @@ def test_on_a_roll_needs_five_days():
 
 
 def test_recap_for_fixture_day():
-    state = fresh_state(days={"2026-09-27": {"turns": 12, "helpers_done": 4, "helpers_failed": 1, "apps": 1,
-                                            "level_ups": [{"chat_id": "c1", "level": 3}]}},
-                        chats={"c1": {"xp": 160, "title": "Budget sheet", "day_xp": {"2026-09-27": 75}}},
+    state = fresh_state(days={"2026-09-27": {"turns": 12, "helpers_done": 4, "helpers_failed": 1, "apps": 1}},
                         achievements=[{"id": "shipped_it", "at": "2026-09-27T15:00:00-05:00"}])
-    assert recap_for(state, "2026-09-27") == {"turns": 12, "helpers_done": 4, "helpers_failed": 1, "helpers_stopped": 0, "apps": 1,
-        "level_ups": [{"chat_id": "c1", "level": 3}], "achievements": ["shipped_it"],
-        "busiest": {"chat_id": "c1", "title": "Budget sheet", "xp": 75}}
+    day_spend = {"usd": 12.5, "tokens": 4_000_000, "top": {"title": "Budget sheet", "usd": 9.0}}
+    assert recap_for(state, "2026-09-27", spend=day_spend) == {
+        "turns": 12, "helpers_done": 4, "helpers_failed": 1, "helpers_stopped": 0, "apps": 1,
+        "achievements": ["shipped_it"], "spend": day_spend}
     assert recap_for(state, "2026-09-26") is None
 
 
@@ -53,20 +52,20 @@ def test_progress_route_carries_achievements_and_yesterdays_recap():
     feed = FakeFeed(runs=[run("r1", "c1", "completed", ended=NOW - timedelta(days=1))])
     body = dispatch({"method": "GET", "path": "progress", "query": {"working_now": ["5"]}}, feed=feed, now=NOW)["body"]
     assert "full_house" in [a["id"] for a in body["achievements"]]
-    assert body["recap"]["turns"] == 1 and body["recap"]["busiest"]["chat_id"] == "c1"
+    assert body["recap"]["turns"] == 1 and body["recap"]["spend"] is None
 
 
-def test_stopped_helpers_are_counted_for_the_recap_without_xp():
+def test_stopped_helpers_are_counted_for_the_recap():
     day_before = NOW - timedelta(days=1)
     feed = FakeFeed(helpers=[terminal("a1", "c1", "stopped", when=day_before), terminal("a2", "c1", "done", when=day_before)])
     result = catch_up(feed, NOW)
     assert (result["recap"]["helpers_stopped"], result["recap"]["helpers_done"]) == (1, 1)
-    assert result["chats"]["c1"]["xp"] == 5
 
 
 def test_a_day_saved_before_stopped_helpers_were_counted_still_counts_one():
     import store
     from progress import new_state
+    # Saved before stopped helpers were counted, and before XP left (so it still has level_ups).
     old_day = {"turns": 1, "helpers_done": 0, "helpers_failed": 0, "apps": 0, "level_ups": []}
     store.write_json("progress.json", {**new_state(), "days": {"2026-09-27": old_day}})
     result = catch_up(FakeFeed(helpers=[terminal("a1", "c1", "stopped", when=NOW - timedelta(days=1))]), NOW)

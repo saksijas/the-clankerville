@@ -1,5 +1,5 @@
 import React from 'react'
-import { countChips, levelShare } from '../domain.js'
+import { countChips, stripSpend } from '../domain.js'
 
 const DOT = { working: '#3fcf8e', needs_you: '#ffc53d', error: '#ff5c5c', watching: '#7fb2ff', on_break: '#9aa3b2' }
 
@@ -13,15 +13,17 @@ export function SwordIcon() {
   )
 }
 
-export default function StatusStrip({ office, counts, stale, swordOn, onSword, onRecap, floorName, floorDot, onElevator }) {
-  const share = levelShare(office)
+export default function StatusStrip({ spend, counts, stale, swordOn, onSword, onRecap, floorName, floorDot, onElevator }) {
+  const today = stripSpend(spend)
   return (
     <div className="ao-strip">
-      <div className="ao-level">
-        <strong>Office · Lv {office.level}</strong>
-        <span className="ao-xp" aria-hidden="true"><span style={{ width: `${share * 100}%` }} /></span>
-        <span className="ao-muted">{office.xp} / {office.next_level_xp} XP</span>
-      </div>
+      {today && (
+        <div className="ao-spend" title={today.title}>
+          <strong>{today.text}</strong>
+          {today.note && <span className="ao-sr"> ({today.note})</span>}
+          <span className="ao-muted ao-spend-detail">{today.detail}</span>
+        </div>
+      )}
       <div className="ao-counts" aria-label="Who's doing what">
         {countChips(counts).map(([state, label, n]) => (
           <span key={state} className="ao-chip"><span className="ao-dot" style={{ background: DOT[state] }} /><b>{n}</b> {label}</span>

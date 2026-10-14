@@ -70,6 +70,31 @@ def run(id, chat_id, status, ended=None):
             "status": status, "started_at": None, "ended_at": iso(ended) if ended else None}
 
 
+def usage_run(id, cost, tokens=None, tally=None, session="s1", provider="claude", ended=None, status="completed"):
+    """One `runs[]` entry of GET /api/chats/{id}/usage, with every field the real route returns.
+
+    `tally` is the provider's running model tally (Claude's `provider_model_usage`), split
+    across two models the way the CLI reports a main model plus a background one.
+    """
+    usage = None
+    if tally is not None:
+        usage = {"provider": provider, "total_tokens": tokens, "provider_model_usage": {
+            "claude-opus": {"inputTokens": tally - 10, "outputTokens": 0, "cacheReadInputTokens": 0,
+                            "cacheCreationInputTokens": 0, "costUSD": cost},
+            "claude-haiku": {"inputTokens": 4, "outputTokens": 6, "costUSD": 0.0},
+        }}
+    when = iso(ended or NOW)
+    return {"id": id, "status": status, "provider": provider, "provider_session_id": session,
+            "started_at": when, "ended_at": when if status != "running" else None, "cost_usd": cost,
+            "input_tokens": tokens, "output_tokens": 0, "cache_read_input_tokens": 0,
+            "cache_creation_input_tokens": 0, "reasoning_output_tokens": 0, "total_tokens": tokens,
+            "model_context_window": 200000, "usage": usage}
+
+
+def usage_body(chat_id, *runs):
+    return {"chat_id": chat_id, "coverage": {}, "totals": {}, "runs": list(runs)}
+
+
 def terminal(agent_id, chat_id, state, when=None):
     """One helper `agent_terminal` event of GET /api/chats/lifecycle-events."""
     moment = iso(when) if when else None
@@ -86,12 +111,11 @@ def app(id, chat_id, created, updated=None):
             "created_at": iso(created), "updated_at": iso(updated or created)}
 
 
-def fresh_state(days=None, chats=None, achievements=None):
+def fresh_state(days=None, achievements=None):
     """An empty progress state (as progress.json holds it) with the given parts."""
     from progress import new_state
     state = new_state()
     state["days"] = dict(days or {})
-    state["chats"] = dict(chats or {})
     state["achievements"] = list(achievements or [])
     return state
 
@@ -100,7 +124,7 @@ class FakeFeed:
 
     def __init__(self, chats=(), delegations=(), details=None, stop=None, cancel=None, delete=None,
                  runs=(), helpers=(), apps=(), page_size=500, threads=None, send=None, create=None, rename=(),
-                 deleted=(), recover=None):
+                 deleted=(), recover=None, usage=None):
         self.runs = [dict(r, update_id=i + 1) for i, r in enumerate(runs)]
         self.helpers = [dict(e, id=i + 1) for i, e in enumerate(helpers)]
         self.apps = [dict(a) for a in apps]
@@ -122,6 +146,15 @@ class FakeFeed:
         self.recover_failure = recover  # a FeedError for recover_chat to raise, or None
         self.sent = []  # (chat_id, body) for every message sent
         self.beside = []  # (chat_id, app_id) for every open-beside request
+        self.usage = dict(usage or {})  # chat_id -> GET /api/chats/{id}/usage body, or a FeedError to raise
+        self.usage_calls = []
+
+    def chat_usage(self, chat_id):
+        self.usage_calls.append(chat_id)
+        found = self.usage.get(chat_id)
+        if isinstance(found, Exception):
+            raise found
+        return found if found is not None else {"chat_id": chat_id, "runs": []}
 
     def list_chats(self):
         return list(self.chats)

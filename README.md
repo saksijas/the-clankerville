@@ -9,8 +9,13 @@ Agent Office; the app id stays `agent-office`.)
   with a tap (sent exactly as the chat's own card would), or send a quick reply. Secret and
   restart cards always stay in the full chat. On a wide screen, **Open chat** puts the full chat
   in a pane beside the office.
-- **Progress.** Finished turns, returning helpers and shipped apps earn XP; chats and the office
-  level up, and a recap tells you what happened yesterday.
+- **What each chat costs** (2026-10-13, in place of XP and levels). On a computer every chat's name
+  tag shows its spend so far (on a phone, tap the chat); its card adds tokens and today's share, the strip shows today's spend for the whole
+  office, and the daily recap says what yesterday cost and who spent the most. Figures come from
+  Möbius's own turn records and are at API prices: on a subscription plan they're what the work would
+  cost through the API, not a bill. (A Claude turn's recorded cost is the conversation's running total,
+  so `spend.py` counts each turn's rise; adding the records up would overstate a chat many times.)
+- **Achievements and the recap** still count finished turns, returning helpers and shipped apps.
 - **The sword.** Press and hold someone: a chat is deleted (Möbius keeps it recoverable for 7 days
   and sends a Recover notification), a helper is dismissed.
 - **The Internet** (an IT Crowd joke): the black box with the red light in the coffee corner.
@@ -38,20 +43,22 @@ Agent Office; the app id stays `agent-office`.)
 The Clankerville acts with your owner access on your own Möbius: its service reads Möbius's owner
 key (`/data/service-token.txt`) on every call, so it can do anything you can. No narrower permission
 covers seeing and steering agents yet, so the manifest's empty permissions list does not show this;
-review updates before installing them. It reads your chats and helpers to draw the office, and it
-stops, deletes or messages a chat only when you use the sword, a quick reply or the Internet box,
+review updates before installing them. It reads your chats, their helpers and their usage records
+(cost and tokens) to draw the office, and it stops, deletes or messages a chat only when you use the sword, a quick reply or the Internet box,
 and it starts or brings back a chat only when you hire at the CR desk or rehire from the Former
 staff board. It talks only to your own Möbius, never to another server. `feed.py` is the single
 module that reads the key and calls Möbius; it never logs it. The office keeps small state files in
-its own storage: desk places; progress (XP, levels, and chat titles for the recap; a deleted chat's
-title is forgotten once its 60 recap days are over); while the Internet is off, the stopped chats'
+its own storage: desk places; progress (the day's counts and achievements, no chat names); spend
+(each chat's title, total cost and tokens, and its turns of the last 8 days, forgotten 8 days after a
+chat's last turn once it has left the office); while the Internet is off, the stopped chats'
 ids and titles; and logs of sword swings, replies, Internet switches, hires and rehires, which never
 hold names or message text and are kept for 30 days.
 
 ## Development
 
 - Service (Python): `service.py` (routes), `feed.py` (Möbius owner API), `office.py` (states,
-  desks, teams), `progress.py` (XP, levels, recap), `quick_reply.py`, `store.py`.
+  desks, teams), `progress.py` (counts, achievements, recap), `spend.py` (what each chat costs),
+  `quick_reply.py`, `store.py`.
 - Screen (React): `index.jsx`, `api.js`, `domain.js`, `theme.js`, `demo.js`, `ui/`.
 - Tests: `python3 -m pytest tests -q` and `node --test tests/*.test.mjs`.
 

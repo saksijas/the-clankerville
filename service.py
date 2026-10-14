@@ -17,6 +17,7 @@ from uuid import NAMESPACE_URL, uuid4, uuid5
 import office
 import progress
 import quick_reply
+import spend
 import store
 from feed import FeedError, OwnerFeed
 
@@ -24,6 +25,12 @@ ROUTES = {}
 # One budget for a whole snapshot, Möbius calls included (spec §8: 8 s ceiling,
 # with room left for process start and the reply).
 SNAPSHOT_BUDGET_SECONDS = 7.0
+# Spend reads must be done while this much of the snapshot budget is still left:
+# none starts after that point, and none waits past it.
+SPEND_RESERVE_SECONDS = 2.0
+# The progress check freshens spend before building yesterday's recap, briefly.
+RECAP_SPEND_SECONDS = 2.5
+RECAP_SPEND_READS = 12
 # Möbius ends a service request at 15 s. Progress reads history for at most
 # 8 s (the rest is read on the next check) and never waits on Möbius past 12 s.
 HISTORY_BUDGET_SECONDS = 8.0
@@ -54,8 +61,10 @@ def _failure(exc):
 @route("GET", "snapshot")
 def _snapshot(request, feed, now):
     deadline = time.monotonic() + SNAPSHOT_BUDGET_SECONDS
+    spend_feed = feed or OwnerFeed(deadline=deadline - SPEND_RESERVE_SECONDS, clock=time.monotonic)
     feed = feed or OwnerFeed(deadline=deadline, clock=time.monotonic)
     now = now or datetime.now(UTC)
+    tz = _owner_zone(request)
     try:
         chats = office.select_chats(feed.list_chats(), now)
         delegations = feed.list_delegations()
@@ -79,26 +88,49 @@ def _snapshot(request, feed, now):
     pods = office.assign_helper_desks(teams, office.assign_floors(chats, previous))
     if pods != previous:
         store.write_json("desks.json", pods)
-    # Read-only here: only the progress route writes progress.json.
-    office_progress = progress.office_view(store.read_json("progress.json", {}))
-    snapshot = office.build_snapshot(chats, details, teams, pods, office_progress, now)
+    spent = _refresh_spend(spend_feed, chats, now, lambda: time.monotonic() < deadline - SPEND_RESERVE_SECONDS)
+    today = progress.local_day(now, tz)
+    chat_spend = {chat_id: spend.chat_view(spent["chats"].get(chat_id), today, tz) for chat_id in chat_ids}
+    snapshot = office.build_snapshot(chats, details, teams, pods, chat_spend, now)
+    snapshot["spend"] = spend.office_view(spent, chat_ids, today, tz)
     snapshot["internet"] = internet_view()
     return snapshot
+
+
+def _refresh_spend(feed, chats, now, budget_left, limit=spend.READS_PER_SNAPSHOT):
+    """Re-read the chats whose spend is due and save it, only when something changed."""
+    saved = store.read_json("spend.json", {})
+    spent = spend.refresh(feed, chats, saved, now, budget_left=budget_left, limit=limit)
+    if spent != saved:
+        store.write_json("spend.json", spent)
+    return spent
+
+
+def _owner_zone(request):
+    """The owner's time zone as the office sent it, or None (the server's) when unknown."""
+    zone = ((request.get("query") or {}).get("tz") or [None])[0]
+    return zone if progress.owner_zone(zone) else None
 
 
 @route("GET", "progress")
 def _progress(request, feed, now):
     started = time.monotonic()
+    spend_feed = feed or OwnerFeed(deadline=started + RECAP_SPEND_SECONDS, clock=time.monotonic)
     feed = feed or OwnerFeed(deadline=started + PROGRESS_BUDGET_SECONDS, clock=time.monotonic)
     now = now or datetime.now(UTC)
     query = request.get("query") or {}
     raw = (query.get("working_now") or ["0"])[0]
     working_now = max(0, int(raw)) if str(raw).isdigit() else 0
-    zone = (query.get("tz") or [None])[0]
-    tz = zone if progress.owner_zone(zone) else None
+    tz = _owner_zone(request)
     try:
+        # Yesterday's recap needs current figures: chats that ran while the office was closed
+        # are read here first (briefly), not left to the snapshots that follow.
+        chats = office.select_chats(feed.list_chats(), now)
+        spent = _refresh_spend(spend_feed, chats, now, lambda: time.monotonic() < started + RECAP_SPEND_SECONDS,
+                               limit=RECAP_SPEND_READS)
         return {"ok": True, **progress.catch_up(feed, now, working_now=working_now, tz=tz,
-                                                 history_seconds=HISTORY_BUDGET_SECONDS, clock=time.monotonic)}
+                                                 history_seconds=HISTORY_BUDGET_SECONDS, clock=time.monotonic,
+                                                 day_spend=lambda day: spend.day_summary(spent, day, tz))}
     except FeedError as exc:
         return _failure(exc)
 

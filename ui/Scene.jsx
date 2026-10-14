@@ -148,7 +148,7 @@ export default function Scene({ snap, f, selectedId, onSelect, onPress, onReleas
       const [sx, sy] = P(spot.x, spot.y)
       return plateBox(character.id, sx, sy, plateText(character, teamSize[character.id] || 0, compact), textScale)
     })
-  const signLabel = signText(snap.office)
+  const signLabel = signText()
   const sign = signLayout(signLabel, textScale, depth)
 
   return (

@@ -3,7 +3,7 @@ import { dialogKey, recapLines } from '../domain.js'
 
 // Yesterday in the office: shown by itself once a day, and again from the Recap button.
 // A modal dialog: focus moves in on open, stays on its one button, and returns on close.
-export default function Recap({ recap, chats, onClose }) {
+export default function Recap({ recap, onClose }) {
   const closeRef = useRef(null)
   useEffect(() => {
     const before = document.activeElement
@@ -16,7 +16,7 @@ export default function Recap({ recap, chats, onClose }) {
     if (action === 'close') { event.stopPropagation(); event.nativeEvent?.stopImmediatePropagation?.(); onClose() }
     if (action === 'stay') { event.preventDefault(); closeRef.current?.focus() }
   }
-  const lines = recapLines(recap, chats)
+  const lines = recapLines(recap)
   return (
     <div className="ao-recap" role="dialog" aria-modal="true" aria-labelledby="ao-recap-title" onKeyDown={onKeyDown}>
       <div className="ao-card ao-recap-card">

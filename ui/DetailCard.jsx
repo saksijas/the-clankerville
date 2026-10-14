@@ -1,5 +1,5 @@
 import React from 'react'
-import { plateTeamSize, swordNote, swordWarnings } from '../domain.js'
+import { cardSpend, plateTeamSize, swordNote, swordWarnings } from '../domain.js'
 import QuickReply from './QuickReply.jsx'
 import { SwordIcon } from './StatusStrip.jsx'
 
@@ -29,7 +29,7 @@ export default function DetailCard({
     : helpers > 0 ? `Team lead · ${helpers} helper${helpers === 1 ? '' : 's'}` : 'Solo chat'
   const canStrike = character.dismissable
   const warnings = canStrike ? swordWarnings(character) : []
-  const share = Math.max(0, Math.min(1, character.xp_progress || 0))
+  const spent = isHelper ? null : cardSpend(character.spend)
   return (
     <section className="ao-card ao-detail" aria-label={character.name}>
       <header className="ao-dhead">
@@ -42,13 +42,15 @@ export default function DetailCard({
         <span className={`ao-pill${character.state === 'needs_you' ? ' ao-pill-ask' : ''}`}>
           <span className="ao-dot" style={{ background: DOT[character.state] }} />{LABEL[character.state] || character.state}
         </span>
-        {!isHelper && (
-          <span className="ao-dlevel" title={`${Math.round(share * 100)}% to Lv ${character.level + 1}`}>
-            <b>Lv {character.level}</b>
-            <span className="ao-xp" aria-hidden="true"><span style={{ width: `${share * 100}%` }} /></span>
+        {spent && (
+          <span className="ao-dspend" title="What this chat has cost, at API prices">
+            <b>{spent.total}</b>
+            <span className="ao-muted">{spent.tokens}</span>
           </span>
         )}
       </header>
+      {spent && <p className="ao-spendline ao-muted">{spent.today} · at API prices</p>}
+      {!isHelper && !spent && <p className="ao-spendline ao-muted">Adding up what this chat has cost…</p>}
       {character.step && <p className="ao-now"><span className="ao-muted">Right now · </span>{character.step}</p>}
       {team.length > 0 && (
         <div className="ao-team">

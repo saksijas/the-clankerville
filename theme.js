@@ -5,10 +5,9 @@ export const CSS = `
   .ao-layout { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); align-items: start; max-width: 1400px; margin: 0 auto; }
   .ao-main { min-width: 0; }
   .ao-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 10px 12px; border-radius: 14px 14px 0 0; background: var(--surface); border: 1px solid var(--border); border-bottom: none; }
-  .ao-level { display: flex; align-items: center; gap: 8px; font-size: 13px; }
-  .ao-xp { display: inline-block; width: 90px; height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
-  .ao-xp.ao-wide { width: 100%; }
-  .ao-xp > span { display: block; height: 100%; background: var(--accent); }
+  .ao-spend { display: flex; align-items: baseline; gap: 8px; font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  @media (max-width: 520px) { .ao-spend-detail { display: none; } }
+  .ao-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
   .ao-counts { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; }
   .ao-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; padding: 3px 9px; border-radius: 999px; background: var(--surface-2); }
   .ao-stale { background: color-mix(in srgb, #f5a524 22%, var(--surface-2)); }
@@ -68,8 +67,9 @@ export const CSS = `
   .ao-pill { display: inline-flex; align-items: center; gap: 7px; padding: 5px 11px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border); font-size: 13px; font-weight: 600; white-space: nowrap; }
   .ao-pill-ask { background: color-mix(in srgb, #ffc53d 16%, var(--surface-2)); border-color: color-mix(in srgb, #ffc53d 55%, var(--border)); }
   .ao-pill-small { padding: 3px 9px; font-size: 12.5px; font-weight: 500; }
-  .ao-dlevel { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; }
-  .ao-dlevel .ao-xp { width: 72px; }
+  .ao-dspend { display: inline-flex; flex-direction: column; align-items: flex-end; line-height: 1.2; font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .ao-dspend b { font-size: 15px; }
+  .ao-spendline { margin: 0; font-size: 12.5px; }
   .ao-now { font-size: 14px; }
   .ao-team { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 6px; }
   .ao-qr-cols { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr); }

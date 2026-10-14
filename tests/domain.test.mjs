@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { bubbleText, countChips, createHold, declutter, holdMs, nextPollDelay, plateText, poseFor, project, roomFrame, spotFor, swordNote, swordToast, swordWarnings, progressNews, shouldAutoOpenRecap, recapLines, dialogKey, departureDelays, doorSpot, walkOffset, watchReducedMotion, createVisibilityGate, textScaleFor, plateTeamSize, openMode, canSendAnswers, createSendGuard, replyStatus, answerStatus, problemText, fullChatText, localDay, levelShare, officeView, createVisiblePoller, INTERNET_ARM_MS, INTERNET_MIN_GAP_MS, internetClick, internetToast } from '../domain.js'
+import { bubbleText, countChips, createHold, declutter, holdMs, nextPollDelay, plateText, poseFor, project, roomFrame, spotFor, swordNote, swordToast, swordWarnings, progressNews, shouldAutoOpenRecap, recapLines, dialogKey, departureDelays, doorSpot, walkOffset, watchReducedMotion, createVisibilityGate, textScaleFor, plateTeamSize, openMode, canSendAnswers, createSendGuard, replyStatus, answerStatus, problemText, fullChatText, localDay, formatUsd, formatTokens, stripSpend, cardSpend, officeView, createVisiblePoller, INTERNET_ARM_MS, INTERNET_MIN_GAP_MS, internetClick, internetToast } from '../domain.js'
 
 function fakeTimers() {
   const q = []
@@ -94,14 +94,47 @@ test('where each character stands', () => {
   assert.deepEqual(spotFor({ kind: 'helper', state: 'busy', desk }, 0), { x: 2.5, y: 1.75 })
 })
 
-test('name tags: chats show short name and level; helpers show none', () => {
-  assert.equal(plateText({ kind: 'chat', state: 'working', short: 'Brainstorm', level: 3 }), 'Brainstorm · Lv 3')
+const SPENT = { usd: 303.48, tokens: 867_200_000, today_usd: 4.125, today_tokens: 1_234_567 }
+
+test('name tags: chats show short name and what they cost; helpers show none', () => {
+  assert.equal(plateText({ kind: 'chat', state: 'working', short: 'Brainstorm', spend: SPENT }), 'Brainstorm · $303')
+  assert.equal(plateText({ kind: 'chat', state: 'working', short: 'Brainstorm', spend: null }), 'Brainstorm') // not read yet
   assert.equal(plateText({ kind: 'helper', state: 'busy', short: 'pixel-sketcher' }), null)
 })
 
 test('the name tag of a lead carries its team size', () => {
-  assert.equal(plateText({ kind: 'chat', state: 'working', short: 'Brainstorm', level: 3 }, 2), 'Brainstorm · Lv 3 · 2 helpers')
-  assert.equal(plateText({ kind: 'chat', state: 'working', short: 'Brainstorm', level: 3 }, 1), 'Brainstorm · Lv 3 · 1 helper')
+  const chat = { kind: 'chat', state: 'working', short: 'Brainstorm', spend: { ...SPENT, usd: 4.2 } }
+  assert.equal(plateText(chat, 2), 'Brainstorm · $4.20 · 2 helpers')
+  assert.equal(plateText(chat, 1), 'Brainstorm · $4.20 · 1 helper')
+})
+
+test('dollars read short on tags and exact on the card', () => {
+  assert.deepEqual([0, 0.004, 0.5, 4.2, 99.994, 303.48, 1234.5, 12345].map(n => formatUsd(n)),
+    ['$0', '<$0.01', '$0.50', '$4.20', '$99.99', '$303', '$1,235', '$12.3k'])
+  assert.equal(formatUsd(99.996), '$100') // the tier follows the rounded amount
+  assert.deepEqual([0, 0.004, 303.48, 1234.5].map(n => formatUsd(n, true)), ['$0.00', '<$0.01', '$303.48', '$1,234.50'])
+  assert.equal(formatUsd(null), '')
+})
+
+test('token counts read short', () => {
+  assert.deepEqual([0, 950, 1000, 1500, 12_345, 1_500_000, 862_800_000, 1_200_000_000].map(formatTokens),
+    ['0', '950', '1k', '1.5k', '12k', '1.5M', '863M', '1.2B'])
+})
+
+test("the strip shows today's spend, marked while some chats aren't added up yet", () => {
+  assert.deepEqual(stripSpend({ today_usd: 4.125, today_tokens: 1_234_567, pending: 0 }),
+    { text: 'Today $4.13', detail: '1.2M tokens', title: "Today's spend at API prices, for every chat in the office", note: '' })
+  const counting = stripSpend({ today_usd: 4.125, today_tokens: 1_234_567, pending: 3 })
+  assert.equal(counting.text, 'Today $4.13…')
+  assert.equal(counting.note, '3 chats still adding up') // said to screen readers, not only in a tooltip
+  assert.equal(stripSpend({ today_usd: 1, today_tokens: 1, pending: 1 }).note, '1 chat still adding up')
+  assert.equal(stripSpend(undefined), null)
+})
+
+test('the card shows the total, tokens and today', () => {
+  assert.deepEqual(cardSpend(SPENT), { total: '$303.48', tokens: '867M tokens', today: 'Today $4.13 · 1.2M tokens' })
+  assert.deepEqual(cardSpend({ usd: 0, tokens: 0, today_usd: 0, today_tokens: 0 }), { total: '$0.00', tokens: '0 tokens', today: 'Nothing today' })
+  assert.equal(cardSpend(null), null)
 })
 
 test('each state has its pose', () => {
@@ -141,11 +174,10 @@ test('sword toasts report what Möbius actually did', () => {
     "Couldn't dismiss pixel-sketcher: The network dropped.")
 })
 
-test('progress news: office and chat level-ups and new achievements, never on first load', () => {
-  const prev = { office: { level: 3 }, chats: { c1: { level: 2, title: 'Budget sheet' } }, achievements: [{ id: 'shipped_it' }] }
-  const next = { office: { level: 4 }, chats: { c1: { level: 3, title: 'Budget sheet' }, c2: { level: 1, title: 'New chat' } },
-    achievements: [{ id: 'shipped_it' }, { id: 'first_team' }] }
-  assert.deepEqual(progressNews(prev, next), ['The office reached Lv 4', 'Budget sheet reached Lv 3', 'New achievement: First team assembled'])
+test('progress news: new achievements only, never on first load', () => {
+  const prev = { achievements: [{ id: 'shipped_it' }] }
+  const next = { achievements: [{ id: 'shipped_it' }, { id: 'first_team' }] }
+  assert.deepEqual(progressNews(prev, next), ['New achievement: First team assembled'])
   assert.deepEqual(progressNews(null, next), [])
 })
 
@@ -161,9 +193,9 @@ test('the recap waits for your saved preferences before opening by itself', () =
 })
 
 test('the recap counts stopped helpers', () => {
-  const day = { turns: 0, helpers_done: 4, helpers_failed: 1, helpers_stopped: 2, apps: 0, level_ups: [], achievements: [], busiest: null }
-  assert.deepEqual(recapLines(day, {}), ['4 helpers came back, 1 failed, 2 stopped'])
-  assert.deepEqual(recapLines({ ...day, helpers_done: 0, helpers_failed: 0, helpers_stopped: 1 }, {}), ['Helpers: 1 stopped'])
+  const day = { turns: 0, helpers_done: 4, helpers_failed: 1, helpers_stopped: 2, apps: 0, achievements: [], spend: null }
+  assert.deepEqual(recapLines(day), ['4 helpers came back, 1 failed, 2 stopped'])
+  assert.deepEqual(recapLines({ ...day, helpers_done: 0, helpers_failed: 0, helpers_stopped: 1 }), ['Helpers: 1 stopped'])
 })
 
 test('the recap dialog keeps the keyboard inside it', () => {
@@ -173,22 +205,19 @@ test('the recap dialog keeps the keyboard inside it', () => {
 })
 
 test('recap lines read like a summary', () => {
-  const recap = { turns: 12, helpers_done: 4, helpers_failed: 1, apps: 1, level_ups: [{ chat_id: 'c1', level: 3 }],
-    achievements: ['shipped_it'], busiest: { chat_id: 'c1', title: 'Budget sheet', xp: 75 } }
-  assert.deepEqual(recapLines(recap, { c1: { title: 'Budget sheet' } }), [
-    '12 turns finished', '4 helpers came back, 1 failed', '1 app shipped', 'Budget sheet reached Lv 3',
-    'New achievement: Shipped it', 'Busiest: Budget sheet (+75 XP)'])
-  assert.deepEqual(recapLines({ turns: 1, helpers_done: 0, helpers_failed: 0, apps: 0, level_ups: [], achievements: [], busiest: null }, {}),
+  const recap = { turns: 12, helpers_done: 4, helpers_failed: 1, apps: 1, achievements: ['shipped_it'],
+    spend: { usd: 12.5, tokens: 4_000_000, top: { title: 'Budget sheet', usd: 9 } } }
+  assert.deepEqual(recapLines(recap), [
+    '12 turns finished', '4 helpers came back, 1 failed', '1 app shipped', 'New achievement: Shipped it',
+    'Spent $12.50 at API prices (4M tokens)', 'Biggest spender: Budget sheet ($9.00)'])
+  assert.deepEqual(recapLines({ turns: 1, helpers_done: 0, helpers_failed: 0, apps: 0, achievements: [], spend: null }),
     ['1 turn finished'])
+  assert.deepEqual(recapLines({ turns: 0, achievements: [], spend: { usd: 1, tokens: 10, top: { title: null, usd: 1 } } }),
+    ['Spent $1.00 at API prices (10 tokens)', 'Biggest spender: a chat ($1.00)'])
 })
 
 test('localDay is the browser-local calendar day', () => {
   assert.equal(localDay(new Date(2026, 8, 28, 23, 30)), '2026-09-28')
-})
-
-test('the level bar measures progress within the current level', () => {
-  assert.equal(levelShare({ xp: 215, level_start_xp: 150, next_level_xp: 300 }), 65 / 150)
-  assert.equal(levelShare({ xp: 0, level_start_xp: 0, next_level_xp: 50 }), 0)
 })
 
 test('key trouble replaces the office even when an older snapshot exists', () => {
@@ -301,9 +330,9 @@ test('scene text grows on narrow screens so it stays about 9 px tall', () => {
 })
 
 test('compact name tags keep just the short name', () => {
-  const chat = { kind: 'chat', state: 'working', short: 'Brainstorm', level: 3 }
+  const chat = { kind: 'chat', state: 'working', short: 'Brainstorm', spend: SPENT }
   assert.equal(plateText(chat, 2, true), 'Brainstorm')
-  assert.equal(plateText(chat, 2, false), 'Brainstorm · Lv 3 · 2 helpers')
+  assert.equal(plateText(chat, 2, false), 'Brainstorm · $303 · 2 helpers')
 })
 
 test('warnings follow the timer and question behind the state on show', () => {
@@ -385,8 +414,7 @@ test('any other problem shows the back room’s own sentence, else a retry hint'
 import { signText, signLayout, plateBox, splitRecommended, isLongLatest, wallTextTransform } from '../domain.js'
 
 test('the wall sign reads Night shift, the title the owner liked', () => {
-  assert.equal(signText({ level: 6 }), 'Night shift')
-  assert.equal(signText(null), 'Night shift')
+  assert.equal(signText(), 'Night shift')
 })
 
 test('wall text is painted on the wall: letters stay upright and follow the wall, never rotated', () => {
@@ -400,28 +428,28 @@ test('wall text is painted on the wall: letters stay upright and follow the wall
 })
 
 test('the sign grows with the text scale but stays on the wall before the door', () => {
-  const small = signLayout('Agent Office · Lv 6', 1, 10)
+  const small = signLayout('Agent Office · $303', 1, 10)
   assert.equal(small.fontSize, 7.5)
   assert.ok(small.from >= 0.4 && small.to <= 7.6 && small.from < small.to)
-  const phone = signLayout('Agent Office · Lv 6', 2, 10)
+  const phone = signLayout('Agent Office · $303', 2, 10)
   assert.ok(phone.fontSize > small.fontSize * 1.8, 'readable on a phone')
   assert.ok(phone.to - phone.from > small.to - small.from, 'the banner widens with the text')
   assert.ok(phone.from >= 0.4 && phone.to <= 7.6, 'it never runs over the door')
-  const long = signLayout('Agent Office · Lv 1234', 2, 10)
+  const long = signLayout('Agent Office · $12,345', 2, 10)
   assert.ok(long.to - long.from <= 7.2 + 1e-9, 'a long label shrinks to fit')
   assert.ok(long.fontSize < 15)
 })
 
 test('a name tag has a box that bubbles can step around', () => {
-  const box = plateBox('c1', 100, 200, 'Agent office · Lv 4', 1)
+  const box = plateBox('c1', 100, 200, 'Agent office · $303', 1)
   assert.equal(box.id, 'c1')
   assert.ok(box.x0 < 100 && box.x1 > 100 && box.y0 < 213 && box.y1 > 213)
-  const big = plateBox('c1', 100, 200, 'Agent office · Lv 4', 2)
+  const big = plateBox('c1', 100, 200, 'Agent office · $303', 2)
   assert.ok(big.x1 - big.x0 > (box.x1 - box.x0) * 1.8)
 })
 
 test('a bubble never covers another character’s name tag', () => {
-  const tag = plateBox('other', 120, 100, 'Agent office · Lv 4', 1)
+  const tag = plateBox('other', 120, 100, 'Agent office · $303', 1)
   const items = [{ id: 'me', state: 'needs_you', text: 'Needs your answer', ax: 120, ay: tag.y1 + 14 }]
   const [bubble] = declutter(items, { charW: 4.4, pad: 6, h: 15, width: 400, obstacles: [tag] })
   const overlaps = bubble.cx + bubble.w / 2 > tag.x0 && bubble.cx - bubble.w / 2 < tag.x1 && bubble.top < tag.y1 && bubble.top + 15 > tag.y0

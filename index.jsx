@@ -12,6 +12,8 @@ import Scene from './ui/Scene.jsx'
 import StatusStrip from './ui/StatusStrip.jsx'
 
 const POLL_MS = 3000
+// The owner's time zone, so "today" and yesterday's recap follow their own calendar day.
+const ownerZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || ''
 const SWORD_HINT_MS = 5000
 const STALE_MS = 10000
 const KEY_TROUBLE = {
@@ -73,7 +75,7 @@ function useOffice(api, visible) {
       timer = null
       if (!alive || inFlight || !visibleRef.current) return
       inFlight = true
-      const body = await api.snapshot()
+      const body = await api.snapshot(ownerZone())
       inFlight = false
       if (!alive) return
       if (body?.ok) {
@@ -105,7 +107,7 @@ function useOffice(api, visible) {
   return { ...state, refresh }
 }
 
-// Progress (levels, achievements, recap) is caught up on open and every
+// Progress (achievements, recap) is caught up on open and every
 // minute while the office can be seen; the working count feeds "Full house".
 function useProgress(api, workingNow, enabled, visible) {
   const [progress, setProgress] = useState(null)
@@ -117,7 +119,7 @@ function useProgress(api, workingNow, enabled, visible) {
   useEffect(() => {
     if (!enabled) return undefined
     let alive = true
-    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone || ''
+    const zone = ownerZone()
     const load = async () => {
       const body = await api.progress(workingRef.current, zone)
       if (alive && body?.ok) setProgress(body)
@@ -235,6 +237,8 @@ export default function App({ appId, token }) {
     return () => clearInterval(t)
   }, [loadFormer, onScreen])
   const openFormer = () => { setFormerOpen(true); loadFormer() }
+  // Chosen at render, like the snapshot: a real list that arrives after demo switched on can't show in it.
+  const formerShown = demo ? { items: DEMO_FORMER, loaded: true } : former
 
   // Easter eggs on floors 2-4 (spec 2026-10-08 §7.3): when each floor's egg was last set off.
   const [eggAt, setEggAt] = useState({})
@@ -461,7 +465,7 @@ export default function App({ appId, token }) {
       )}
       <div className="ao-layout" inert={recapShown || pickerOpen || hire || formerOpen ? true : undefined}>
         <section className="ao-main">
-          <StatusStrip office={shown.office} counts={shown.counts} stale={stale && !demo} swordOn={swordOn} onSword={toggleSword}
+          <StatusStrip spend={shown.spend} counts={shown.counts} stale={stale && !demo} swordOn={swordOn} onSword={toggleSword}
             onRecap={!demo && progress?.recap ? () => setRecapOpen(true) : undefined}
             floorName={floorLabel(viewFloor, floorsCount)} floorDot={otherFloorNeedsYou} onElevator={() => setPickerOpen(true)} />
           <div className="ao-scene" style={swordOn ? { cursor: SWORD_CURSOR } : undefined}>
@@ -470,7 +474,7 @@ export default function App({ appId, token }) {
               internetOff={internet.off} internetArmed={Boolean(internetArmed)} onInternet={pressInternet}
               viewFloor={viewFloor} floorDot={otherFloorNeedsYou} onElevator={() => setPickerOpen(true)}
               arrivals={moves.arrivals} ghosts={moves.ghosts}
-              egg={egg} onEgg={pressEgg} onHire={openHire} former={former.items} onFormer={openFormer} />
+              egg={egg} onEgg={pressEgg} onHire={openHire} former={formerShown.items} onFormer={openFormer} />
             {egg?.kind === 'fire' && egg.active && <div className="ao-fire" role="status">{egg.text}</div>}
             {swordOn && swordHint && <div className="ao-hint">Hold on someone: a chat is deleted, a helper dismissed · Tap Sword or press Esc to put it away</div>}
             {internetBusy && <div className="ao-hint">{internet.off ? 'Turning the Internet back on…' : 'Turning the Internet off…'}</div>}
@@ -496,9 +500,9 @@ export default function App({ appId, token }) {
           holding={hold && selected && hold.id === selected.id ? hold : null}
           api={api} demo={demo} openLabel={besideScreen ? 'Open chat' : 'Open full chat'} />
       </div>
-      {recapShown && <Recap recap={progress.recap} chats={progress.chats} onClose={() => setRecapOpen(false)} />}
+      {recapShown && <Recap recap={progress.recap} onClose={() => setRecapOpen(false)} />}
       {hire && <HireForm busy={hire.busy} onHire={submitHire} onClose={() => setHire(null)} />}
-      {formerOpen && <FormerStaff staff={former.items} loaded={former.loaded} busyId={rehiring} onRehire={rehire} onClose={() => setFormerOpen(false)} />}
+      {formerOpen && <FormerStaff staff={formerShown.items} loaded={formerShown.loaded} busyId={rehiring} onRehire={rehire} onClose={() => setFormerOpen(false)} />}
       {pickerOpen && <FloorPicker floors={floorsList} current={viewFloor} badges={badges} onPick={goToFloor} onClose={() => setPickerOpen(false)} />}
     </div>
   )

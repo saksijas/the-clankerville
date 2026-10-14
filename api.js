@@ -14,7 +14,7 @@ export function createApi(appId, token, fetchImpl = (...args) => fetch(...args))
     }
   }
   return {
-    snapshot: () => call('snapshot'),
+    snapshot: (tz = '') => call(`snapshot${tz ? `?tz=${encodeURIComponent(tz)}` : ''}`),
     progress: (workingNow = 0, tz = '') => call(`progress?working_now=${Math.max(0, Math.floor(workingNow) || 0)}${tz ? `&tz=${encodeURIComponent(tz)}` : ''}`),
     sword: (kind, id) => call('sword', { method: 'POST', body: JSON.stringify({ kind, id }) }),
     internet: on => call('internet', { method: 'POST', body: JSON.stringify({ on }) }),

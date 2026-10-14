@@ -3,8 +3,11 @@
 
 const look = (hair, shirt, skin) => ({ hair, shirt, skin })
 
-const chat = (id, name, short, state, level, desk, lookValue, extra = {}) => ({
-  id, kind: 'chat', chat_id: id, name, short, state, level, xp_progress: 0.4, queued: 0, desk, floor: 1, look: lookValue, dismissable: true, ...extra,
+// `usd` is what the sample chat has cost so far, at API prices; today's share is a fifth of it.
+const chat = (id, name, short, state, usd, desk, lookValue, extra = {}) => ({
+  id, kind: 'chat', chat_id: id, name, short, state, queued: 0, desk, floor: 1, look: lookValue, dismissable: true,
+  spend: { usd, tokens: Math.round(usd * 2_600_000), today_usd: usd / 5, today_tokens: Math.round(usd * 520_000) },
+  ...extra,
 })
 
 const helper = (id, lead, name, state, desk, lookValue, dismissable = true) => ({
@@ -14,7 +17,7 @@ const helper = (id, lead, name, state, desk, lookValue, dismissable = true) => (
 export const DEMO_SNAPSHOT = {
   ok: true,
   generated_at: '2026-09-28T17:00:00+00:00',
-  office: { level: 4, xp: 320, level_start_xp: 300, next_level_xp: 500 },
+  spend: { today_usd: 25.65, today_tokens: 66_690_000, pending: 0 },
   counts: { working: 3, needs_you: 1, error: 1, watching: 1, on_break: 6 },
   room: { width: 13, depth: 11, floors: 4 },
   // The busiest on floor 1 (spec 2026-10-08 §5); four on a break upstairs by the watercooler.
@@ -25,22 +28,22 @@ export const DEMO_SNAPSHOT = {
     { floor: 4, egg: 'fire', counts: { working: 0, needs_you: 0, error: 0, watching: 0, on_break: 0 } },
   ],
   characters: [
-    chat('demo-lead', 'Agent office brainstorm', 'Brainstorm', 'working', 3, { x: 1.9, y: 0.7 }, look('#3b2a20', '#6d5dfc', '#f2c9a0'), { step: 'Drawing office mockups' }),
+    chat('demo-lead', 'Agent office brainstorm', 'Brainstorm', 'working', 48.2, { x: 1.9, y: 0.7 }, look('#3b2a20', '#6d5dfc', '#f2c9a0'), { step: 'Drawing office mockups' }),
     helper('demo-h1', 'demo-lead', 'pixel-sketcher', 'busy', { x: 0.6, y: 2.1 }, look('#d9a441', '#2fb3a3', '#e0ac7e')),
     helper('demo-h2', 'demo-lead', 'spec-reviewer', 'on_hold', { x: 3.2, y: 0.7 }, look('#1f1f28', '#f08a5d', '#8d5a3b')),
     // Finished: shows its green check, then walks out of the door (spec §5.4).
     helper('demo-h3', 'demo-lead', 'test-runner', 'done', { x: 3.2, y: 2.1 }, look('#2d2d2d', '#9bc53d', '#f2c9a0'), false),
-    chat('demo-budget', 'Budget sheet', 'Budget sheet', 'working', 5, { x: 5.9, y: 0.7 }, look('#7a3e2b', '#4c9be8', '#f5d1b5'), { step: 'Running tests' }),
-    chat('demo-tasks', 'Tasks app tweaks', 'Tasks app', 'needs_you', 2, { x: 9.9, y: 0.7 }, look('#2d2d2d', '#e85d75', '#c68a62')),
-    chat('demo-trip', 'Trip planner', 'Trip planner', 'error', 2, { x: 1.9, y: 3.7 }, look('#b05a2c', '#7c8a9e', '#f0c8a8')),
-    chat('demo-report', 'Weekly report', 'Weekly report', 'working', 1, { x: 5.9, y: 3.7 }, look('#1f1f28', '#9bc53d', '#e8b793'), { step: 'Editing report.md' }),
-    chat('demo-new', 'New chat', 'New chat', 'on_break', 1, { x: 9.9, y: 3.7 }, look('#5a4632', '#2fb3a3', '#e8b793')),
-    chat('demo-wiki', 'Team wiki', 'Team wiki', 'watching', 2, { x: 1.9, y: 6.7 }, look('#3b2a20', '#e85d75', '#e0ac7e')),
-    chat('demo-snake', 'Snake game', 'Snake game', 'on_break', 1, { x: 5.9, y: 6.7 }, look('#d9a441', '#6d5dfc', '#f5d1b5')),
-    chat('demo-maps', 'Maps', 'Maps', 'on_break', 2, { x: 1.9, y: 0.7 }, look('#1f1f28', '#4c9be8', '#8d5a3b'), { floor: 2 }),
-    chat('demo-weather', 'Weather', 'Weather', 'on_break', 2, { x: 5.9, y: 0.7 }, look('#7a3e2b', '#9bc53d', '#f2c9a0'), { floor: 2 }),
-    chat('demo-beats', 'Beat machine', 'Beat machine', 'on_break', 1, { x: 9.9, y: 0.7 }, look('#b05a2c', '#f08a5d', '#e8b793'), { floor: 2 }),
-    chat('demo-recipes', 'Recipe box', 'Recipe box', 'on_break', 1, { x: 1.9, y: 3.7 }, look('#2d2d2d', '#2fb3a3', '#c68a62'), { floor: 2 }),
+    chat('demo-budget', 'Budget sheet', 'Budget sheet', 'working', 23.75, { x: 5.9, y: 0.7 }, look('#7a3e2b', '#4c9be8', '#f5d1b5'), { step: 'Running tests' }),
+    chat('demo-tasks', 'Tasks app tweaks', 'Tasks app', 'needs_you', 6.4, { x: 9.9, y: 0.7 }, look('#2d2d2d', '#e85d75', '#c68a62')),
+    chat('demo-trip', 'Trip planner', 'Trip planner', 'error', 12.1, { x: 1.9, y: 3.7 }, look('#b05a2c', '#7c8a9e', '#f0c8a8')),
+    chat('demo-report', 'Weekly report', 'Weekly report', 'working', 3.85, { x: 5.9, y: 3.7 }, look('#1f1f28', '#9bc53d', '#e8b793'), { step: 'Editing report.md' }),
+    chat('demo-new', 'New chat', 'New chat', 'on_break', 0.42, { x: 9.9, y: 3.7 }, look('#5a4632', '#2fb3a3', '#e8b793')),
+    chat('demo-wiki', 'Team wiki', 'Team wiki', 'watching', 9.3, { x: 1.9, y: 6.7 }, look('#3b2a20', '#e85d75', '#e0ac7e')),
+    chat('demo-snake', 'Snake game', 'Snake game', 'on_break', 2.15, { x: 5.9, y: 6.7 }, look('#d9a441', '#6d5dfc', '#f5d1b5')),
+    chat('demo-maps', 'Maps', 'Maps', 'on_break', 14.6, { x: 1.9, y: 0.7 }, look('#1f1f28', '#4c9be8', '#8d5a3b'), { floor: 2 }),
+    chat('demo-weather', 'Weather', 'Weather', 'on_break', 1.9, { x: 5.9, y: 0.7 }, look('#7a3e2b', '#9bc53d', '#f2c9a0'), { floor: 2 }),
+    chat('demo-beats', 'Beat machine', 'Beat machine', 'on_break', 0.08, { x: 9.9, y: 0.7 }, look('#b05a2c', '#f08a5d', '#e8b793'), { floor: 2 }),
+    chat('demo-recipes', 'Recipe box', 'Recipe box', 'on_break', 5.5, { x: 1.9, y: 3.7 }, look('#2d2d2d', '#2fb3a3', '#c68a62'), { floor: 2 }),
   ],
   teams: [{ lead_id: 'demo-lead', member_ids: ['demo-h1', 'demo-h2', 'demo-h3'] }],
 }

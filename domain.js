@@ -158,13 +158,66 @@ export function plateTeamSize(members, overflow = 0) {
   return members.filter(member => member.state !== 'done').length + overflow
 }
 
-// Chats carry name and level (a lead also its team size); helpers show no tag.
-// Compact tags (narrow screens) keep just the short name; the card has the rest.
+// Chats carry name and what they've cost so far (a lead also its team size); helpers
+// show no tag. Compact tags (narrow screens) keep just the short name; the card has the rest.
 export function plateText(character, helperCount = 0, compact = false) {
   if (character.kind !== 'chat') return null
   if (compact) return character.short
-  const base = `${character.short} · Lv ${character.level}`
-  return helperCount > 0 ? `${base} · ${helperCount} helper${helperCount === 1 ? '' : 's'}` : base
+  const parts = [character.short]
+  if (character.spend) parts.push(formatUsd(character.spend.usd))
+  if (helperCount > 0) parts.push(`${helperCount} helper${helperCount === 1 ? '' : 's'}`)
+  return parts.join(' · ')
+}
+
+// --- Spend (2026-10-13): what each chat cost at API prices, in place of XP ---------------
+
+const trimZero = text => text.replace(/\.0$/, '')
+
+// Short on tags and the strip ($4.20, $303, $12.3k); exact on the card and recap ($303.48).
+export function formatUsd(n, exact = false) {
+  if (typeof n !== 'number' || !Number.isFinite(n)) return ''
+  if (n > 0 && n < 0.005) return '<$0.01'
+  if (exact) return `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  const cents = Math.round(n * 100) / 100 // pick the tier from what will be shown
+  if (cents <= 0) return '$0'
+  if (cents < 100) return `$${cents.toFixed(2)}`
+  if (cents < 9999.5) return `$${Math.round(cents).toLocaleString('en-US')}`
+  return `$${trimZero((cents / 1000).toFixed(1))}k`
+}
+
+export function formatTokens(n) {
+  const v = Math.max(0, Math.round(Number(n) || 0))
+  if (v < 1000) return String(v)
+  if (v < 9950) return `${trimZero((v / 1e3).toFixed(1))}k`
+  if (v < 999_500) return `${Math.round(v / 1e3)}k`
+  if (v < 9_950_000) return `${trimZero((v / 1e6).toFixed(1))}M`
+  if (v < 999_500_000) return `${Math.round(v / 1e6)}M`
+  return `${trimZero((v / 1e9).toFixed(1))}B`
+}
+
+// The strip's figure: today's spend for the whole office; "…" while some chats aren't added up
+// yet, with a note that screen readers hear (a tooltip alone reaches neither touch nor them).
+export function stripSpend(spend) {
+  if (!spend) return null
+  const pending = spend.pending > 0 ? spend.pending : 0
+  return {
+    text: `Today ${formatUsd(spend.today_usd)}${pending ? '…' : ''}`,
+    detail: `${formatTokens(spend.today_tokens)} tokens`,
+    title: "Today's spend at API prices, for every chat in the office",
+    note: pending ? `${pending} chat${pending === 1 ? '' : 's'} still adding up` : '',
+  }
+}
+
+// The card's figures for one chat, or null before its records were first read.
+export function cardSpend(spend) {
+  if (!spend) return null
+  return {
+    total: formatUsd(spend.usd, true),
+    tokens: `${formatTokens(spend.tokens)} tokens`,
+    today: spend.today_usd > 0 || spend.today_tokens > 0
+      ? `Today ${formatUsd(spend.today_usd)} · ${formatTokens(spend.today_tokens)} tokens`
+      : 'Nothing today',
+  }
 }
 
 // --- Polish 2026-10-07 --------------------------------------------------------------------
@@ -267,15 +320,10 @@ export const ACHIEVEMENT_NAMES = {
 }
 const achievementName = id => ACHIEVEMENT_NAMES[id] || id
 
-// What changed between two progress readings; the first reading is never news.
+// New achievements between two progress readings; the first reading is never news.
 export function progressNews(prev, next) {
   if (!prev) return []
   const news = []
-  if (next.office.level > prev.office.level) news.push(`The office reached Lv ${next.office.level}`)
-  for (const [chatId, chat] of Object.entries(next.chats)) {
-    const before = prev.chats[chatId]?.level || 1
-    if (chat.level > before) news.push(`${chat.title || 'A chat'} reached Lv ${chat.level}`)
-  }
   const had = new Set(prev.achievements.map(a => a.id))
   for (const achievement of next.achievements) {
     if (!had.has(achievement.id)) news.push(`New achievement: ${achievementName(achievement.id)}`)
@@ -298,7 +346,7 @@ export function dialogKey(key) {
 
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`
 
-export function recapLines(recap, chats) {
+export function recapLines(recap) {
   const lines = []
   if (recap.turns) lines.push(`${plural(recap.turns, 'turn', 'turns')} finished`)
   const done = recap.helpers_done || 0
@@ -311,9 +359,12 @@ export function recapLines(recap, chats) {
       : `Helpers: ${others.join(', ')}`)
   }
   if (recap.apps) lines.push(`${plural(recap.apps, 'app', 'apps')} shipped`)
-  for (const up of recap.level_ups) lines.push(`${chats[up.chat_id]?.title || 'A chat'} reached Lv ${up.level}`)
-  for (const id of recap.achievements) lines.push(`New achievement: ${achievementName(id)}`)
-  if (recap.busiest) lines.push(`Busiest: ${recap.busiest.title || 'a chat'} (+${recap.busiest.xp} XP)`)
+  for (const id of recap.achievements || []) lines.push(`New achievement: ${achievementName(id)}`)
+  if (recap.spend) {
+    lines.push(`Spent ${formatUsd(recap.spend.usd, true)} at API prices (${formatTokens(recap.spend.tokens)} tokens)`)
+    const top = recap.spend.top
+    if (top) lines.push(`Biggest spender: ${top.title || 'a chat'} (${formatUsd(top.usd, true)})`)
+  }
   return lines
 }
 
@@ -322,13 +373,7 @@ export function localDay(date) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
 }
 
-// --- Review fixes: level bar, screens, visibility-gated polling ---
-
-// Share of the current level completed (the bar starts at the level's floor, not 0 XP).
-export function levelShare(office) {
-  const span = office.next_level_xp - office.level_start_xp
-  return span > 0 ? Math.min(1, Math.max(0, (office.xp - office.level_start_xp) / span)) : 0
-}
+// --- Review fixes: screens, visibility-gated polling ---
 
 const KEY_CODES = new Set(['no_key', 'key_rejected'])
 
