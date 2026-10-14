@@ -185,16 +185,6 @@ export function formatUsd(n, exact = false) {
   return `$${trimZero((cents / 1000).toFixed(1))}k`
 }
 
-export function formatTokens(n) {
-  const v = Math.max(0, Math.round(Number(n) || 0))
-  if (v < 1000) return String(v)
-  if (v < 9950) return `${trimZero((v / 1e3).toFixed(1))}k`
-  if (v < 999_500) return `${Math.round(v / 1e3)}k`
-  if (v < 9_950_000) return `${trimZero((v / 1e6).toFixed(1))}M`
-  if (v < 999_500_000) return `${Math.round(v / 1e6)}M`
-  return `${trimZero((v / 1e9).toFixed(1))}B`
-}
-
 // The strip's figure: today's spend for the whole office; "…" while some chats aren't added up
 // yet, with a note that screen readers hear (a tooltip alone reaches neither touch nor them).
 export function stripSpend(spend) {
@@ -202,21 +192,19 @@ export function stripSpend(spend) {
   const pending = spend.pending > 0 ? spend.pending : 0
   return {
     text: `Today ${formatUsd(spend.today_usd)}${pending ? '…' : ''}`,
-    detail: `${formatTokens(spend.today_tokens)} tokens`,
     title: "Today's spend at API prices, for every chat in the office",
     note: pending ? `${pending} chat${pending === 1 ? '' : 's'} still adding up` : '',
   }
 }
 
-// The card's figures for one chat, or null before its records were first read.
+// The card's figures for one chat, or null before its records were first read. Dollars only
+// (owner's choice, 2026-10-14): token counts are mostly cheap re-reading of the conversation, so
+// they read as far bigger than what they cost; the service still keeps them.
 export function cardSpend(spend) {
   if (!spend) return null
   return {
     total: formatUsd(spend.usd, true),
-    tokens: `${formatTokens(spend.tokens)} tokens`,
-    today: spend.today_usd > 0 || spend.today_tokens > 0
-      ? `Today ${formatUsd(spend.today_usd)} · ${formatTokens(spend.today_tokens)} tokens`
-      : 'Nothing today',
+    today: spend.today_usd > 0 ? `Today ${formatUsd(spend.today_usd)}` : 'Nothing today',
   }
 }
 
@@ -361,7 +349,7 @@ export function recapLines(recap) {
   if (recap.apps) lines.push(`${plural(recap.apps, 'app', 'apps')} shipped`)
   for (const id of recap.achievements || []) lines.push(`New achievement: ${achievementName(id)}`)
   if (recap.spend) {
-    lines.push(`Spent ${formatUsd(recap.spend.usd, true)} at API prices (${formatTokens(recap.spend.tokens)} tokens)`)
+    lines.push(`Spent ${formatUsd(recap.spend.usd, true)} at API prices`)
     const top = recap.spend.top
     if (top) lines.push(`Biggest spender: ${top.title || 'a chat'} (${formatUsd(top.usd, true)})`)
   }

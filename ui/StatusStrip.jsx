@@ -21,7 +21,6 @@ export default function StatusStrip({ spend, counts, stale, swordOn, onSword, on
         <div className="ao-spend" title={today.title}>
           <strong>{today.text}</strong>
           {today.note && <span className="ao-sr"> ({today.note})</span>}
-          <span className="ao-muted ao-spend-detail">{today.detail}</span>
         </div>
       )}
       <div className="ao-counts" aria-label="Who's doing what">

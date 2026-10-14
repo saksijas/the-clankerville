@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { bubbleText, countChips, createHold, declutter, holdMs, nextPollDelay, plateText, poseFor, project, roomFrame, spotFor, swordNote, swordToast, swordWarnings, progressNews, shouldAutoOpenRecap, recapLines, dialogKey, departureDelays, doorSpot, walkOffset, watchReducedMotion, createVisibilityGate, textScaleFor, plateTeamSize, openMode, canSendAnswers, createSendGuard, replyStatus, answerStatus, problemText, fullChatText, localDay, formatUsd, formatTokens, stripSpend, cardSpend, officeView, createVisiblePoller, INTERNET_ARM_MS, INTERNET_MIN_GAP_MS, internetClick, internetToast } from '../domain.js'
+import { bubbleText, countChips, createHold, declutter, holdMs, nextPollDelay, plateText, poseFor, project, roomFrame, spotFor, swordNote, swordToast, swordWarnings, progressNews, shouldAutoOpenRecap, recapLines, dialogKey, departureDelays, doorSpot, walkOffset, watchReducedMotion, createVisibilityGate, textScaleFor, plateTeamSize, openMode, canSendAnswers, createSendGuard, replyStatus, answerStatus, problemText, fullChatText, localDay, formatUsd, stripSpend, cardSpend, officeView, createVisiblePoller, INTERNET_ARM_MS, INTERNET_MIN_GAP_MS, internetClick, internetToast } from '../domain.js'
 
 function fakeTimers() {
   const q = []
@@ -116,14 +116,9 @@ test('dollars read short on tags and exact on the card', () => {
   assert.equal(formatUsd(null), '')
 })
 
-test('token counts read short', () => {
-  assert.deepEqual([0, 950, 1000, 1500, 12_345, 1_500_000, 862_800_000, 1_200_000_000].map(formatTokens),
-    ['0', '950', '1k', '1.5k', '12k', '1.5M', '863M', '1.2B'])
-})
-
 test("the strip shows today's spend, marked while some chats aren't added up yet", () => {
   assert.deepEqual(stripSpend({ today_usd: 4.125, today_tokens: 1_234_567, pending: 0 }),
-    { text: 'Today $4.13', detail: '1.2M tokens', title: "Today's spend at API prices, for every chat in the office", note: '' })
+    { text: 'Today $4.13', title: "Today's spend at API prices, for every chat in the office", note: '' })
   const counting = stripSpend({ today_usd: 4.125, today_tokens: 1_234_567, pending: 3 })
   assert.equal(counting.text, 'Today $4.13…')
   assert.equal(counting.note, '3 chats still adding up') // said to screen readers, not only in a tooltip
@@ -131,9 +126,10 @@ test("the strip shows today's spend, marked while some chats aren't added up yet
   assert.equal(stripSpend(undefined), null)
 })
 
-test('the card shows the total, tokens and today', () => {
-  assert.deepEqual(cardSpend(SPENT), { total: '$303.48', tokens: '867M tokens', today: 'Today $4.13 · 1.2M tokens' })
-  assert.deepEqual(cardSpend({ usd: 0, tokens: 0, today_usd: 0, today_tokens: 0 }), { total: '$0.00', tokens: '0 tokens', today: 'Nothing today' })
+// Dollars only (owner's choice, 2026-10-14): token counts are mostly cheap re-reading and read as bigger than they cost.
+test('the card shows the total and today, in dollars only', () => {
+  assert.deepEqual(cardSpend(SPENT), { total: '$303.48', today: 'Today $4.13' })
+  assert.deepEqual(cardSpend({ usd: 0, tokens: 0, today_usd: 0, today_tokens: 0 }), { total: '$0.00', today: 'Nothing today' })
   assert.equal(cardSpend(null), null)
 })
 
@@ -209,11 +205,11 @@ test('recap lines read like a summary', () => {
     spend: { usd: 12.5, tokens: 4_000_000, top: { title: 'Budget sheet', usd: 9 } } }
   assert.deepEqual(recapLines(recap), [
     '12 turns finished', '4 helpers came back, 1 failed', '1 app shipped', 'New achievement: Shipped it',
-    'Spent $12.50 at API prices (4M tokens)', 'Biggest spender: Budget sheet ($9.00)'])
+    'Spent $12.50 at API prices', 'Biggest spender: Budget sheet ($9.00)'])
   assert.deepEqual(recapLines({ turns: 1, helpers_done: 0, helpers_failed: 0, apps: 0, achievements: [], spend: null }),
     ['1 turn finished'])
   assert.deepEqual(recapLines({ turns: 0, achievements: [], spend: { usd: 1, tokens: 10, top: { title: null, usd: 1 } } }),
-    ['Spent $1.00 at API prices (10 tokens)', 'Biggest spender: a chat ($1.00)'])
+    ['Spent $1.00 at API prices', 'Biggest spender: a chat ($1.00)'])
 })
 
 test('localDay is the browser-local calendar day', () => {

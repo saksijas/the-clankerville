@@ -6,7 +6,6 @@ export const CSS = `
   .ao-main { min-width: 0; }
   .ao-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; padding: 10px 12px; border-radius: 14px 14px 0 0; background: var(--surface); border: 1px solid var(--border); border-bottom: none; }
   .ao-spend { display: flex; align-items: baseline; gap: 8px; font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  @media (max-width: 520px) { .ao-spend-detail { display: none; } }
   .ao-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
   .ao-counts { display: flex; flex-wrap: wrap; gap: 6px; flex: 1; }
   .ao-chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; padding: 3px 9px; border-radius: 999px; background: var(--surface-2); }

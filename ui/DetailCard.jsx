@@ -45,7 +45,6 @@ export default function DetailCard({
         {spent && (
           <span className="ao-dspend" title="What this chat has cost, at API prices">
             <b>{spent.total}</b>
-            <span className="ao-muted">{spent.tokens}</span>
           </span>
         )}
       </header>

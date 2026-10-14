@@ -10,11 +10,14 @@ Agent Office; the app id stays `agent-office`.)
   restart cards always stay in the full chat. On a wide screen, **Open chat** puts the full chat
   in a pane beside the office.
 - **What each chat costs** (2026-10-13, in place of XP and levels). On a computer every chat's name
-  tag shows its spend so far (on a phone, tap the chat); its card adds tokens and today's share, the strip shows today's spend for the whole
+  tag shows its spend so far (on a phone, tap the chat); its card adds today's share, the strip shows today's spend for the whole
   office, and the daily recap says what yesterday cost and who spent the most. Figures come from
   Möbius's own turn records and are at API prices: on a subscription plan they're what the work would
   cost through the API, not a bill. (A Claude turn's recorded cost is the conversation's running total,
   so `spend.py` counts each turn's rise; adding the records up would overstate a chat many times.)
+  Only dollars are shown (2026-10-14): token counts are kept but hidden, because most tokens are cheap
+  re-reading of the conversation, so they looked far bigger than what they cost. A chat's model sets
+  its price, so a chat with more tokens can cost less.
 - **Achievements and the recap** still count finished turns, returning helpers and shipped apps.
 - **The sword.** Press and hold someone: a chat is deleted (Möbius keeps it recoverable for 7 days
   and sends a Recover notification), a helper is dismissed.
